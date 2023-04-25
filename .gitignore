@@ -1,0 +1,5 @@
+*.tif
+*.TIF
+*.pdf
+.DS_Store
+data/*/**
