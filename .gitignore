@@ -3,3 +3,4 @@
 *.pdf
 .DS_Store
 data/*/**
+api_creds
