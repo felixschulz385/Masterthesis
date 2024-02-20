@@ -1,0 +1,14 @@
+[
+    {"id": "lc100", "name": "PROBA-V 100m Land Cover Map", 
+     "url": "https://zenodo.org/record/3939038/files/PROBAV_LC100_global_v3.0.1_2015-base_Discrete-Classification-map_EPSG-4326.tif?download=1",
+     "path": "data/land_cover/raw/PROBAV_LC100_global_v3.0.1_2015-base_Discrete-Classification-map_EPSG-4326.tif",
+     "setup": "dl"},
+    {"id": "gadm", "name": "GADM Boundaries", 
+     "url": "https://geodata.ucdavis.edu/gadm/gadm4.1/gadm_410-levels.zip",
+     "path": "data/boundaries/raw/gadm_410-levels.zip",
+     "setup": "dl+extract"},
+    {"id": "biome_clusters", "name": "Copernicus Biome Clusters", 
+     "url": "https://zenodo.org/record/5848610/files/biome_cluster_shapefile.zip?download=1",
+     "path": "data/biome_clusters/raw/biome_cluster_shapefile.zip",
+     "setup": "dl+extract"}
+ ]

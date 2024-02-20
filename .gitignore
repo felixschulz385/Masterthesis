@@ -1,5 +1,8 @@
 *.tif
 *.TIF
 *.pdf
-.DS_Store
+*.tar
+*.zip
 data/*/**
+aux/
+output/documents/*/*/**
