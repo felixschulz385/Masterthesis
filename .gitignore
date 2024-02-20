@@ -6,3 +6,6 @@
 data/*/**
 aux/
 output/documents/*/*/**
+.DS_Store
+data/*/**
+api_creds
