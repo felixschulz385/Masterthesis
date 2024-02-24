@@ -1,17 +1,23 @@
+# Standard library imports
 import os
-#import shutil
 import time
 import re
 import tarfile
-from functools import partial
-from itertools import compress
-import urllib.request
 import zipfile
-import requests
+import urllib.request
+import json
+
+# Third-party library imports
 import geopandas as gpd
 import shapely
 from tqdm import tqdm
 from multiprocessing import Pool
+import ee
+
+# Specific imports
+from functools import partial
+from itertools import compress
+import requests
 
 class DataAgent:
     """
@@ -22,9 +28,9 @@ def imagery_downloader(link, root_dir):
     tmp = root_dir + "data/imagery/raw/" + re.compile("(?<=\=).*(?=[\&]requestSignature\=)").search(link).group(0) + ".tar"
     urllib.request.urlretrieve(link, tmp)
 
-class download:
+class download_agent:
     
-    def __init__(self, root_dir, area):
+    def __init__(self, root_dir, area = "BRA", year = 2010):
         """
         Constructor for DataAgent.
 
@@ -34,7 +40,7 @@ class download:
         """
         self.root_dir = root_dir
         self.area = area
-        self.prepare_filesystem()
+        self.year = year
             
     def fetch(self, dataset):
         """
@@ -49,19 +55,213 @@ class download:
             """
             os.makedirs(os.path.dirname(self.root_dir + dataset["path"]), exist_ok = True)
 
-        def download(dataset):
+        def dl(dataset):
             """
             Download function to fetch data from a URL.
             """
             urllib.request.urlretrieve(dataset["url"], self.root_dir + dataset["path"])
             
-        def extract(dataset):
+        def ex(dataset):
             """
             Extract function to extract data from a zip file.
             """
             with zipfile.ZipFile(self.root_dir + dataset["path"], 'r') as zip_ref:
-                zip_ref.extractall(self.root_dir + dataset["path"].split("/raw")[0])
+                zip_ref.extractall((self.root_dir + dataset["path"]).split("raw")[0] + "raw")
                 
+        def fe_mb_mo(dataset):
+            """
+            Fetch Mapbiomas Mosaics to Google cloud.
+            
+            This function downloads MapBiomas mosaics to Google Cloud using the Earth Engine Python API. 
+            It selects specific bands from the mosaics, creates an image, and exports it to Google Cloud Storage
+            as GeoTIFF files.
+
+            Note:
+            - Ensure that Earth Engine API is initialized and authenticated before using this function.
+            - Ensure the necessary permissions and credentials to access Google Cloud Storage are set up.
+
+            """
+            
+            # Initialize the Earth Engine API
+            ee.Initialize(project='master-thesis-414809')
+
+            # Read the grid shapefile
+            boundaries = gpd.read_file(self.root_dir + "data/boundaries/gadm_410-BRA.geojson")
+            boundaries = ee.Geometry.Rectangle(boundaries.bounds.to_numpy().tolist()[0], proj = "EPSG:4326", evenOdd = False)
+            
+            # Access the MapBiomas mosaic collection
+            mb_mosaics = ee.ImageCollection('projects/nexgenmap/MapBiomas2/LANDSAT/BRAZIL/mosaics-2')
+            
+            # Define the bands to be selected from the mosaics
+            bands = [
+                "blue_median",
+                "green_median",
+                "red_median",
+                "nir_median",
+                "swir1_median",
+                "swir2_median",
+            ]
+            
+            # Filter the mosaic collection by year, select bands, create a mosaic, and convert to int32
+            img = mb_mosaics.\
+                filterMetadata("year", "equals", self.year).\
+                    select(bands).\
+                        mosaic().\
+                            int32()
+                                    
+
+            try:
+                # Define the export task
+                task = ee.batch.Export.image.toCloudStorage(
+                    image=img,
+                    description=f'mapbiomas_{self.year}',
+                    bucket="master-thesis-lulc",
+                    fileNamePrefix=f'mapbiomas/{self.year}_',
+                    scale=30,
+                    maxPixels=1e13,
+                    crs="EPSG:5641",
+                    crsTransform=[30, 0, 0, 0, -30, 0],
+                    shardSize=208,
+                    fileDimensions=[3328, 3328],
+                    region=boundaries,
+                    fileFormat='GeoTIFF'
+                    )
+                # Start the export task
+                task.start()
+                print("*** Started export task ***")
+                print("--- Task status ---")
+                print(task.status())
+                print("--- Task status ---")
+            except:
+                print("*** Failed to start export task ***")
+                
+        def dl_ls(dataset, clear_list = True):
+            # resolve timeframe
+            if (self.year >= 2015):
+                query_dataset_name = "landsat_etm_c2_l2"
+                query_list_id = self.area + "_ls7_" + str(self.year)
+            if (self.year < 2015):
+                query_dataset_name = "landsat_tm_c2_l2"
+                query_list_id = self.area + "_ls45_" + str(self.year)
+                
+            # resolve area
+            if (self.area == "za"):
+                polygon_to_bounds = self.root_dir + "data/boundaries/gadm_za.gpkg"
+            elif (self.area == "br"):
+                polygon_to_bounds = self.root_dir + "data/boundaries/gadm_410-BRA.geojson"
+            
+            # get boundaries
+            print("--- Loading Boundaries ---")
+            boundaries = gpd.read_file(polygon_to_bounds)
+            
+            # get credentials
+            with open("code/data/api_creds", "r") as file:
+                exec("self.creds = " + file.read())
+            # login
+            print("--- Login ---")
+            response = requests.post("https://m2m.cr.usgs.gov/api/api/json/stable/login",
+                                    json = self.creds)
+            API_key = response.json()["data"]
+            
+            # get all scenes within boundaries
+            print("--- Querying scenes ---")
+            scene_list = []
+            it_lower = 0
+            while True:
+                time.sleep(1)
+                # do the API request
+                response = requests.post("https://m2m.cr.usgs.gov/api/api/json/stable/scene-search",
+                                        json = {"datasetName": query_dataset_name,
+                                                "maxResults": 1000,
+                                                "startingNumber": it_lower,
+                                                "sceneFilter": {"acquisitionFilter": {"start": str(self.year) + "-02-01", "end": str(self.year) + "-08-30"},
+                                                                "CloudCoverFilter": {"max": 75, "includeUnknown": "true"},
+                                                                "spatialFilter": {"filterType": "mbr", 
+                                                                                "lowerLeft": {"latitude": boundaries.total_bounds[1], "longitude": boundaries.total_bounds[0]},
+                                                                                "upperRight": {"latitude": boundaries.total_bounds[3], "longitude": boundaries.total_bounds[2]}}}},
+                                        headers = {"X-Auth-Token": API_key})
+
+                # process results
+                res_polygons = gpd.GeoDataFrame({"productId": [x["browse"][0]["id"] for x in response.json()["data"]["results"]],
+                                                "entityId": [x["entityId"] for x in response.json()["data"]["results"]],
+                                            "geometry": [shapely.Polygon(x["spatialBounds"]["coordinates"][0]) for x in response.json()["data"]["results"]]},
+                                            crs = "EPSG:4326")
+                # filter for precise boundaries of the area
+                scene_list += res_polygons.loc[res_polygons.intersects(boundaries.geometry.iloc[0]), "entityId"].values.tolist()
+                
+                # set for the next iteration
+                if it_lower == 0:
+                    print(f"*** Total hits: {response.json()['data']['totalHits']} ***")
+                print(f"*** Queried scenes from {it_lower} ***")
+                if it_lower + 1000 > response.json()["data"]["totalHits"]:
+                    print(f"*** Gathered {len(scene_list)} scenes ***")
+                    break
+                it_lower = response.json()["data"]["nextRecord"]
+
+            
+            # check scene list
+            response = requests.post("https://m2m.cr.usgs.gov/api/api/json/stable/scene-list-summary",
+                                    json = {"listId": query_list_id,
+                                            "datasetName": query_dataset_name},
+                                    headers = {"X-Auth-Token": API_key})
+            query_list_unempty = (not response.json()["data"]["datasets"] == [])
+            if query_list_unempty:
+                query_list_unempty = (response.json()["data"]["datasets"][0]["sceneCount"] > 0)
+            
+            # clear scene list
+            if (query_list_unempty & clear_list):
+                print("--- Removing existing list ---")
+                response = requests.post("https://m2m.cr.usgs.gov/api/api/json/stable/scene-list-remove",
+                            json = {"listId": query_list_id},
+                            headers = {"X-Auth-Token": API_key})
+            
+            # add to scene list if cleared or empty
+            if ((query_list_unempty & clear_list) | ~query_list_unempty):
+                print("--- Adding scenes to list ---")
+                response = requests.post("https://m2m.cr.usgs.gov/api/api/json/stable/scene-list-add",
+                                        json = {"listId": query_list_id,
+                                                "datasetName": query_dataset_name,
+                                                "entityIds": scene_list},
+                                        headers = {"X-Auth-Token": API_key})
+            
+            # get productIds for download
+            print("--- Querying download products ---")
+            response = requests.post("https://m2m.cr.usgs.gov/api/api/json/stable/download-options",
+                                    json = {"listId": query_list_id,
+                                            "datasetName": query_dataset_name},
+                                    headers = {"X-Auth-Token": API_key}) 
+            downloads = [{"label": query_list_id + str(idx), 
+                        "productId": x["id"], 
+                        "entityId": x["entityId"]} for idx, x in enumerate(response.json()["data"]) if x["available"]]
+
+            
+            # get download links
+            print("--- Requesting download links ---")
+            response = requests.post("https://m2m.cr.usgs.gov/api/api/json/stable/download-request",
+                                    json = {"downloads": downloads},
+                                    headers = {"X-Auth-Token": API_key})
+            downloads_links = [x["url"] for x in response.json()["data"]["availableDownloads"]]
+            # filter list for files not already downloaded
+            downloads_links = list(compress(downloads_links, [not os.path.exists(self.root_dir + "data/imagery/raw/" + re.compile("(?<=\=).*(?=[\&]requestSignature\=)").search(link).group(0) + ".tar") for link in downloads_links]))
+            
+            # download files
+            print("--- Downloading files ---") 
+            with Pool(4) as p:
+                list(tqdm(p.map(partial(imagery_downloader, root_dir = self.root_dir), downloads_links, chunksize = 100), total = len(downloads_links)))
+
+            # logout
+            print("--- Logging out ---")
+            response = requests.post("https://m2m.cr.usgs.gov/api/api/json/stable/logout",
+                                    headers = {"X-Auth-Token": API_key})
+            
+            # unpack
+            print("--- Unpacking ---")
+            for filename in [re.compile("(?<=\=).*(?=[\&]requestSignature\=)").search(link).group(0) for link in downloads_links]:
+                with tarfile.open(self.root_dir + "data/imagery/raw/" + filename + ".tar", "r") as file:
+                    outdir = self.root_dir + "data/imagery/" + query_list_id
+                    os.makedirs(outdir, exist_ok = True)
+                    file.extractall(outdir)
+                    
         prepare_filesystem(dataset)
         # Perform operations defined in the dataset setup
         for ops in dataset["setup"].split("+"):
@@ -86,125 +286,3 @@ class download:
                 # Extract downloaded ZIP file
                 with zipfile.ZipFile(self.root_dir + f"data/DTM/raw/srtm_{lon}_{lat}.zip", 'r') as zip_ref:
                     zip_ref.extractall(self.root_dir + "data/DTM")
-    
-    
-    # Imagery data
-    # TODO: Implement download of Imagery data
-    def download_imagery(self, year, clear_list = True):
-        # resolve timeframe
-        if (year >= 2015):
-            query_dataset_name = "landsat_etm_c2_l2"
-            query_list_id = self.area + "_ls7_" + str(year)
-        if (year < 2015):
-            query_dataset_name = "landsat_tm_c2_l2"
-            query_list_id = self.area + "_ls45_" + str(year)
-            
-        # resolve area
-        if (self.area == "za"):
-            polygon_to_bounds = self.root_dir + "data/boundaries/gadm_za.gpkg"
-        
-        # get boundaries
-        print("--- Loading Boundaries ---")
-        boundaries = gpd.read_file(polygon_to_bounds)
-        
-        # get credentials
-        with open("code/data/api_creds", "r") as file:
-            exec("self.creds = " + file.read())
-        # login
-        print("--- Login ---")
-        response = requests.post("https://m2m.cr.usgs.gov/api/api/json/stable/login",
-                                json = self.creds)
-        API_key = response.json()["data"]
-        
-        # get all scenes within boundaries
-        print("--- Querying scenes ---")
-        scene_list = []
-        it_starting_number = 0
-        it_next_record = 1001
-        it_total_hits = 0
-        while (it_total_hits != it_next_record):
-            print(f"*** Querying scenes {it_starting_number} to {it_next_record - 1} ***")
-            time.sleep(1)
-            # do the API request
-            response = requests.post("https://m2m.cr.usgs.gov/api/api/json/stable/scene-search",
-                                    json = {"datasetName": query_dataset_name,
-                                            "maxResults": 1000,
-                                            "startingNumber": it_starting_number,
-                                            "sceneFilter": {"acquisitionFilter": {"start": "2015-01-01", "end": "2015-12-31"},
-                                                            "spatialFilter": {"filterType": "mbr", 
-                                                                            "lowerLeft": {"latitude": boundaries.total_bounds[1], "longitude": boundaries.total_bounds[0]},
-                                                                            "upperRight": {"latitude": boundaries.total_bounds[3], "longitude": boundaries.total_bounds[2]}}}},
-                                    headers = {"X-Auth-Token": API_key})
-            # set for the next iteration
-            if it_starting_number == 0:
-                it_total_hits = response.json()["data"]["totalHits"]
-            it_starting_number = it_next_record
-            it_next_record = response.json()["data"]["nextRecord"]
-            # process results
-            res_polygons = gpd.GeoDataFrame({"productId": [x["browse"][0]["id"] for x in response.json()["data"]["results"]],
-                                            "entityId": [x["entityId"] for x in response.json()["data"]["results"]],
-                                        "geometry": [shapely.Polygon(x["spatialBounds"]["coordinates"][0]) for x in response.json()["data"]["results"]]},
-                                        crs = "EPSG:4326")
-            #
-            scene_list += res_polygons.loc[res_polygons.intersects(boundaries.geometry.iloc[0]), "entityId"].values.tolist()
-        
-        # check scene list
-        response = requests.post("https://m2m.cr.usgs.gov/api/api/json/stable/scene-list-summary",
-                                json = {"listId": query_list_id,
-                                        "datasetName": query_dataset_name},
-                                headers = {"X-Auth-Token": API_key})
-        query_list_unempty = (response.json()["data"]["datasets"][0]["sceneCount"] > 0)
-        
-        # clear scene list
-        if (query_list_unempty & clear_list):
-            print("--- Removing existing list ---")
-            response = requests.post("https://m2m.cr.usgs.gov/api/api/json/stable/scene-list-remove",
-                        json = {"listId": query_list_id},
-                        headers = {"X-Auth-Token": API_key})
-        
-        # add to scene list if cleared or empty
-        if ((query_list_unempty & clear_list) | ~query_list_unempty):
-            print("--- Adding scenes to list ---")
-            response = requests.post("https://m2m.cr.usgs.gov/api/api/json/stable/scene-list-add",
-                                    json = {"listId": query_list_id,
-                                            "datasetName": query_dataset_name,
-                                            "entityIds": scene_list},
-                                    headers = {"X-Auth-Token": API_key})
-        
-        # get productIds for download
-        print("--- Querying download products ---")
-        response = requests.post("https://m2m.cr.usgs.gov/api/api/json/stable/download-options",
-                                json = {"listId": query_list_id,
-                                        "datasetName": query_dataset_name},
-                                headers = {"X-Auth-Token": API_key}) 
-        downloads = [{"label": query_list_id + str(idx), 
-                      "productId": x["id"], 
-                      "entityId": x["entityId"]} for idx, x in enumerate(response.json()["data"]) if x["available"]]
-
-        
-        # get download links
-        print("--- Requesting download links ---")
-        response = requests.post("https://m2m.cr.usgs.gov/api/api/json/stable/download-request",
-                                json = {"downloads": downloads},
-                                headers = {"X-Auth-Token": API_key})
-        downloads_links = [x["url"] for x in response.json()["data"]["availableDownloads"]]
-        # filter list for files not already downloaded
-        downloads_links = list(compress(downloads_links, [not os.path.exists(self.root_dir + "data/imagery/raw/" + re.compile("(?<=\=).*(?=[\&]requestSignature\=)").search(link).group(0) + ".tar") for link in downloads_links]))
-        
-        # download files
-        print("--- Downloading files ---") 
-        with Pool(4) as p:
-            list(tqdm(p.map(partial(imagery_downloader, root_dir = self.root_dir), downloads_links, chunksize = 100), total = len(downloads_links)))
-
-        # logout
-        print("--- Logging out ---")
-        response = requests.post("https://m2m.cr.usgs.gov/api/api/json/stable/logout",
-                                headers = {"X-Auth-Token": API_key})
-        
-        # unpack
-        print("--- Unpacking ---")
-        for filename in [re.compile("(?<=\=).*(?=[\&]requestSignature\=)").search(link).group(0) for link in downloads_links]:
-            with tarfile.open(self.root_dir + "data/imagery/raw/" + filename + ".tar", "r") as file:
-                outdir = self.root_dir + "data/imagery/" + query_list_id
-                os.makedirs(outdir, exist_ok = True)
-                file.extractall(outdir)
