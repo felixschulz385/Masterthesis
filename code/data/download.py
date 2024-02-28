@@ -59,7 +59,11 @@ class download_agent:
             """
             Download function to fetch data from a URL.
             """
-            urllib.request.urlretrieve(dataset["url"], self.root_dir + dataset["path"])
+            if type(dataset["url"]) == dict:
+                for file in dataset["url"]["files"]:
+                    urllib.request.urlretrieve(dataset["url"]["base"] + file, self.root_dir + dataset["path"] + "/" + file)
+            if not type(dataset["url"]) == dict:
+                urllib.request.urlretrieve(dataset["url"], self.root_dir + dataset["path"])
             
         def ex(dataset):
             """
