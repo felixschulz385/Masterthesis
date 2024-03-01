@@ -3,6 +3,7 @@
 *.pdf
 *.tar
 *.zip
+*.pyc
 data/*/**
 aux/
 output/documents/*/*/**
