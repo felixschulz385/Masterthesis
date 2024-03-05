@@ -14,7 +14,7 @@ This repository contains the code and data used in the master thesis "Deforestat
 
 In this thesis, I investigate the impact of deforestation on water quality and health in Brazil. I use a combination of remote sensing data, water quality data, and health data to try to estimate the causal effect of deforestation on public health through soil erosion. The thesis is divided into two main parts. First, I build a vision transformer to evaluate the potential of using neural networks as student models to existing solutions as a cost-efficient alternative. In the second part I provide an econometric analysis of the impact of deforestation on water quality and mortality rates through soil erosion.
 
-![Early-stage visualization comparing existing data sources for deforestation](/output/figures/mortality_plot.png)
+![Early-stage visualization comparing existing data sources for deforestation](/output/figures/verification.png)
 
 ## About
 
