@@ -69,8 +69,13 @@ class download_agent:
             """
             Extract function to extract data from a zip file.
             """
-            with zipfile.ZipFile(self.root_dir + dataset["path"], 'r') as zip_ref:
-                zip_ref.extractall((self.root_dir + dataset["path"]).split("raw")[0] + "raw")
+            if type(dataset["url"]) == dict:
+                for file in dataset["url"]["files"]:
+                    with zipfile.ZipFile(self.root_dir + dataset["path"] + "/" + file, 'r') as zip_ref:
+                        zip_ref.extractall(self.root_dir + dataset["path"])
+            if not type(dataset["url"]) == dict:
+                with zipfile.ZipFile(self.root_dir + dataset["path"], 'r') as zip_ref:
+                    zip_ref.extractall((self.root_dir + dataset["path"]).split("raw")[0] + "raw")
                 
         def fe_mb_mo(dataset):
             """
