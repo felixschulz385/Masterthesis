@@ -55,7 +55,7 @@
     {"id": "msc_rivers", "name": "Rivers of Brazil, 2012",
      "notes": "https://metadados.snirh.gov.br/geonetwork/srv/api/records/a01764d3-4742-4f7d-b867-01bf544dde6d",
      "url": "https://metadados.snirh.gov.br:/geonetwork/srv/api/records/a01764d3-4742-4f7d-b867-01bf544dde6d/attachments/GEOFT_BHO_REF_RIO.zip",
-     "path": "data/misc/raw/GEOFT_BHO_REF_RIO.zip",
+     "path": "data/river_network/raw/GEOFT_BHO_REF_RIO.zip",
      "setup": "dl+ex"},
     {"id": "biome_clusters", "name": "Copernicus Biome Clusters", 
      "url": "https://zenodo.org/record/5848610/files/biome_cluster_shapefile.zip?download=1",
