@@ -67,5 +67,9 @@
     {"id": "im_mapbiomas_30", "name": "Mapbiomas imagery",
      "note": "data is fetched to Google Cloud only, local copies are downloaded in preprocessing",
      "path": "data/imagery/raw",
-     "setup": "fe_mb_mo"}
+     "setup": "fe_mb_mo"},
+     {"id": "msc_dem_cop", "name": "Copernicus DEM GLO-90",
+      "citation": "https://doi.org/10.5270/ESA-c5d3d65",
+      "path": "data/misc/raw/DEM_GLO-90",
+      "setup": "fe_de_co"}
  ]

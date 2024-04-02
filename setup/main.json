@@ -1,5 +1,4 @@
 {
-    "grid": {
-        "origin": [0, 0],
-    },
+    "multicore": "true",
+    "cores": "4"
 }

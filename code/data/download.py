@@ -76,6 +76,30 @@ class download_agent:
             if not type(dataset["url"]) == dict:
                 with zipfile.ZipFile(self.root_dir + dataset["path"], 'r') as zip_ref:
                     zip_ref.extractall((self.root_dir + dataset["path"]).split("raw")[0] + "raw")
+                    
+        def fe_de_co(dataset):
+            """
+            Fetch Copernicus DEM data.
+            """
+            # create shapely polygons on a grid, spanning the entire planet with a resolution of 1 degrees
+            grid = gpd.GeoDataFrame(geometry = [shapely.geometry.box(i, j, i+1, j+1) for i in range(-180, 180, 1) for j in range(-90, 90, 1)])
+            # filter for the area of interest
+            grid["in_bbox"] = grid.intersects(shapely.geometry.box(*gpd.read_file("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/misc/gadm_410-BRA.geojson", engine="pyogrio").total_bounds))
+            grid["in_boundaries"] = grid.intersects(gpd.read_file("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/misc/gadm_410-BRA.geojson", engine="pyogrio").geometry.iloc[0])
+            grid_filtered = grid.copy()[grid.in_boundaries]
+            grid_filtered = grid_filtered[grid_filtered.centroid.map(lambda x: x.coords[0][0]) < -32.5]
+            # format the coordinates
+            grid_filtered["formatted_lon"] = grid_filtered.bounds.minx.map(lambda x: "W" + str(int(x*-1)).zfill(3) if x < 0 else "E" + str(int(x)).zfill(3))
+            grid_filtered["formatted_lat"] = grid_filtered.bounds.miny.map(lambda x: "S" + str(int(x*-1)).zfill(2) if x < 0 else "N" + str(int(x)).zfill(2))
+            # get the links
+            grid_filtered["filename"] = grid_filtered.apply(lambda x: f"Copernicus_DSM_30_{x.formatted_lat}_00_{x.formatted_lon}_00.tar", axis = 1)
+            grid_filtered["dl_link"] = grid_filtered.apply(lambda x: f"https://prism-dem-open.copernicus.eu/pd-desk-open-access/prismDownload/COP-DEM_GLO-90-DGED__2021_1/{x.filename}", axis = 1)
+            # download and extract the files
+            for idx, row in tqdm(grid_filtered.iterrows(), total = grid_filtered.shape[0]):
+                if os.path.exists(self.root_dir + dataset["path"] + "/" + row.filename):
+                    continue
+                urllib.request.urlretrieve(row.dl_link, self.root_dir + dataset["path"] + "/" + row.filename)
+                tarfile.open(self.root_dir + dataset["path"] + "/" + row.filename, "r").extractall(self.root_dir + dataset["path"])
                 
         def fe_mb_mo(dataset):
             """
