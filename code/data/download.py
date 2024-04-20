@@ -84,8 +84,9 @@ class download_agent:
             # create shapely polygons on a grid, spanning the entire planet with a resolution of 1 degrees
             grid = gpd.GeoDataFrame(geometry = [shapely.geometry.box(i, j, i+1, j+1) for i in range(-180, 180, 1) for j in range(-90, 90, 1)])
             # filter for the area of interest
-            grid["in_bbox"] = grid.intersects(shapely.geometry.box(*gpd.read_file("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/misc/gadm_410-BRA.geojson", engine="pyogrio").total_bounds))
-            grid["in_boundaries"] = grid.intersects(gpd.read_file("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/misc/gadm_410-BRA.geojson", engine="pyogrio").geometry.iloc[0])
+            boundaries_limits = gpd.read_file("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/misc/gadm_410-BRA.geojson", engine="pyogrio").to_crs(5641).buffer(200 * 1e3).to_crs(4326)
+            grid["in_bbox"] = grid.intersects(shapely.geometry.box(*boundaries_limits.total_bounds))
+            grid["in_boundaries"] = grid.intersects(boundaries_limits.geometry.iloc[0])
             grid_filtered = grid.copy()[grid.in_boundaries]
             grid_filtered = grid_filtered[grid_filtered.centroid.map(lambda x: x.coords[0][0]) < -32.5]
             # format the coordinates
@@ -98,8 +99,11 @@ class download_agent:
             for idx, row in tqdm(grid_filtered.iterrows(), total = grid_filtered.shape[0]):
                 if os.path.exists(self.root_dir + dataset["path"] + "/" + row.filename):
                     continue
-                urllib.request.urlretrieve(row.dl_link, self.root_dir + dataset["path"] + "/" + row.filename)
-                tarfile.open(self.root_dir + dataset["path"] + "/" + row.filename, "r").extractall(self.root_dir + dataset["path"])
+                try:
+                    urllib.request.urlretrieve(row.dl_link, self.root_dir + dataset["path"] + "/" + row.filename)
+                    tarfile.open(self.root_dir + dataset["path"] + "/" + row.filename, "r").extractall(self.root_dir + dataset["path"])
+                except:
+                    pass
                 
         def fe_mb_mo(dataset):
             """

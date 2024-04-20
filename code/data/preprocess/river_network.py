@@ -386,3 +386,74 @@ def split_vertice(split_data):
                 [shapely.geometry.LineString(ccoords[csubindex==iisplit][isplit:])] + list(cvertice.geometry.geoms)[iisplit+1:]
             cvertice["geometry"] = shapely.geometry.MultiLineString([shapely.geometry.LineString(x) for x in ccoords])
     return cvertice
+
+def calculate_distance_from_estuary(rivers, topology, segment_length = 1000):
+    """
+    Calculates the distance of river segments from the nearest estuary. This function updates
+    the `rivers` DataFrame by adding two new columns: `distance_from_estuary` and `segment_offset`.
+    The calculation is done by tracing the river network upstream, starting from estuary points,
+    to compute cumulative distances for each segment.
+
+    Parameters:
+    - rivers (pd.DataFrame): A DataFrame containing river network data. It must include columns
+      for `downstream_node_id`, `upstream_node_id`, `length`, and identifying attributes for
+      estuaries (e.g., 'river', 'segment', 'subsegment').
+    - topology (pd.DataFrame): A DataFrame describing the topology of the network. It should
+      contain Boolean columns `source` and `estuary` to identify river sources and estuaries.
+    - segment_length (int, optional): The base segment length used to calculate segment offsets.
+      Default value is 1000.
+
+    Returns:
+    - pd.DataFrame: The updated `rivers` DataFrame with added `distance_from_estuary` and
+      `segment_offset` columns, representing the distance from the nearest estuary and the
+      distance modulo the `segment_length`, respectively.
+
+    Notes:
+    - This function uses multiprocessing for calculating the distance from the estuary for each
+      segment efficiently.
+    - The function assumes all data are clean and correctly formatted. Missing values in the
+      necessary columns may lead to failures or incorrect results.
+    """
+    # create a dict from end point to upstream river ids
+    dict_points = defaultdict(list)
+    # Iterate over pairs of corresponding tuples from both arrays
+    for point, index in zip(rivers.dropna(subset = "downstream_node_id").downstream_node_id.astype(np.int32), rivers.dropna(subset = "downstream_node_id").index):
+        # Append the index to the list corresponding to the point
+        dict_points[point].append(index)
+    # Convert defaultdict to dict
+    downstream_lookup = dict(dict_points)
+    # create a dict from river id to end node
+    upstream_lookup = {key: value for key, value in zip(rivers.dropna(subset = "upstream_node_id").index, rivers.dropna(subset = "upstream_node_id").upstream_node_id.astype(np.int32))}
+    # create a dict from river id to length
+    length_lookup = {key: value for key, value in zip(rivers.dropna(subset = "upstream_node_id").index, rivers.dropna(subset = "upstream_node_id").length)}
+    # create a dict to check if a point is a river source node
+    end_node_lookup = {x: True for x in topology[topology.source & ~topology.estuary].index}
+
+    # get all river ids of nodes at estuaries
+    estuary_ids = rivers.query("river==0 & segment==0 & subsegment==0").index.to_list()
+
+    # prepare data for multiprocessing
+    datasets = []
+    for i in range(len(estuary_ids)):
+        datasets.append([{key: 0 for key in rivers[rivers.estuary == rivers.loc[estuary_ids[i]].estuary].dropna(subset = "upstream_node_id").index}, (estuary_ids[i], 0)])
+
+    # function to calculate segment offsets
+    def calculate_distance_from_estuary(dataset):
+        query = [dataset[1]]
+        out = dataset[0]
+        while query:
+            tmp = query.pop()
+            out[tmp[0]] = tmp[1]
+            if not end_node_lookup.get(upstream_lookup[tmp[0]], False):
+                query += [(x, ((tmp[1] + length_lookup[tmp[0]]))) for x in downstream_lookup.get(upstream_lookup[tmp[0]], [])] # % 1000
+        return out
+    # compute segment offsets
+    distance_from_estuary = [calculate_distance_from_estuary(x) for x in datasets]
+    
+    # write segment offsets to shapefile
+    rivers["distance_from_estuary"] = pd.NA
+    rivers.update(pd.concat([pd.DataFrame({"distance_from_estuary": x}) for x in distance_from_estuary]))
+    rivers["distance_from_estuary"] = pd.to_numeric(rivers.distance_from_estuary.round(0))
+    rivers["segment_offset"] = pd.to_numeric(rivers.distance_from_estuary % segment_length)
+    
+    return rivers
