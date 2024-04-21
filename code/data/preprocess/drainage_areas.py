@@ -328,7 +328,7 @@ def fix_rivers_in_grid(i, rivers, topology, drainage_polygons, drainage_polygons
     to_fix.dropna(subset=["estuary", "river"], inplace = True)
     # return if there are no rivers to fix
     if to_fix.empty:
-        return None
+        return c_drainage_polygons
     # get shared confluence nodes with corresponding rivers
     to_fix = pd.DataFrame().from_dict(to_fix.groupby("index_left").apply(lambda x: find_shared_nodes(rivers, topology, x['estuary'], x['river']), include_groups=False).to_dict(), orient="index").reset_index(names = "polygon_id")
     
