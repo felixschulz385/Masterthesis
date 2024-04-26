@@ -8,7 +8,10 @@ import cv2
 from rasterio.io import MemoryFile
 from pysheds.grid import Grid
 import matplotlib.pyplot as plt
-from itertools import chain
+from itertools import chain, product
+import tempfile
+from tqdm import tqdm
+import warnings
 
 def expand_bounds(bounds, factor = 1.5):
     """
@@ -339,3 +342,4 @@ def fix_rivers_in_grid(i, rivers, topology, drainage_polygons, drainage_polygons
     final_df = pd.concat([c_drainage_polygons, update_set.dropna()]).drop(index=to_fix.polygon_id)
     final_df["geometry"] = final_df.buffer(0)
     return final_df
+  

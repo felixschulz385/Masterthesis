@@ -10,3 +10,4 @@ output/documents/*/*/**
 .DS_Store
 data/*/**
 api_creds
+setup/miniforge3/*
