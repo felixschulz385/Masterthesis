@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -13,53 +14,7 @@ import tempfile
 from tqdm import tqdm
 import warnings
 
-def expand_bounds(bounds, factor = 1.5):
-    """
-    Expands a bounding box by a specified factor outward from its center.
 
-    Parameters:
-    - bounds (list[float]): A list of four floats representing the coordinates of the bounding box [xmin, ymin, xmax, ymax].
-    - factor (float, optional): The factor by which the bounds should be expanded. Default is 1.5.
-
-    Returns:
-    - list[float]: A list of four floats representing the new expanded bounding box.
-    """
-    return [bounds[0] - (bounds[2] - bounds[0]) * (factor - 1) / 2, bounds[1] - (bounds[3] - bounds[1]) * (factor - 1) / 2, bounds[2] + (bounds[2] - bounds[0]) * (factor - 1) / 2, bounds[3] + (bounds[3] - bounds[1]) * (factor - 1) / 2]
-
-
-def load_height_profile(bbox, dem_path = "/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/misc/raw/DEM_GLO-90/"):
-    """
-    Load and return the height profile for a given bounding box.
-
-    Args:
-    bbox (tuple): A tuple representing the bounding box with four values (min latitude, min longitude, max latitude, max longitude).
-
-    Returns:
-    xarray.DataArray: An array containing the height profile within the specified bounding box.
-    """
-
-    # Generate file path suffixes for latitude and longitude using grid conventions
-    # Latitudes and longitudes are formatted based on their hemisphere and rounded to the nearest degree
-    lat_lon = product(
-        [f"E{int(lat):03}" if lat >= 0 else f"W{-int(lat):03}" for lat in np.arange(np.floor(bbox[0]), np.ceil(bbox[2]), 1)],
-        [f"N{int(lon):02}" if lon >= 0 else f"S{-int(lon):02}" for lon in np.arange(np.floor(bbox[1]), np.ceil(bbox[3]), 1)]
-    )
-
-    # Construct file paths for DEM (Digital Elevation Model) tiles within the bounding box
-    files_dem_cop = [
-        f"{dem_path}Copernicus_DSM_30_{lon}_00_{lat}_00/DEM/Copernicus_DSM_30_{lon}_00_{lat}_00_DEM.tif"
-        for lat, lon in lat_lon
-    ]
-
-    # Load the DEM files and combine them into a single DataArray using xarray, keeping the first channel and excluding the last pixel on each edge
-    height_profile = xr.combine_by_coords([
-        rxr.open_rasterio(file)[0, :-1, :-1] for file in files_dem_cop
-    ])
-
-    # # Clip the combined height profile to exactly match the bounding box using rioxarray
-    # height_profile = height_profile.rio.clip_box(*bbox)
-
-    return height_profile
 
 def get_sub_polygon(query_points, c_polygon_halves):
     """
@@ -108,7 +63,7 @@ def get_sub_polygon(query_points, c_polygon_halves):
     return t_sub_polygon
 
 
-def extract_polygons_edge(c_edge, upstream_polygon, payload, c_polygon_projected, c_polygon_halves, to_snap_points, to_snap_points_projected):
+def extract_polygons_edge(c_edge, upstream_polygon, payload, c_polygon_projected, c_polygon_halves, to_snap_points, to_snap_points_projected, extracted_river_network, c_grid, t_fdir):
     """
     Computes drainage area polygons by matching provided river edges with edges computed from the DEM.
     
@@ -128,30 +83,6 @@ def extract_polygons_edge(c_edge, upstream_polygon, payload, c_polygon_projected
     # Initial approximation of the edge bounding box polygon
     t_sub_polygon = get_sub_polygon([c_edge.geometry.coords[0], c_edge.geometry.coords[-1]], c_polygon_halves)
     
-    # Load the DEM into a pysheds raster via rioxarray and a temporary file
-    with tempfile.NamedTemporaryFile() as memfile:
-        # Load and preprocess height profile within the bounding box of the sub-polygon, expanded by 1.5 units
-        t_height_profile = load_height_profile(gpd.GeoSeries([t_sub_polygon.envelope], crs=5641).to_crs(4326).total_bounds)
-        # Fill missing values, set no data value, and save as raster
-        t_height_profile.fillna(t_height_profile.max()).rio.write_nodata(-32767).rio.to_raster(memfile.name, driver="GTiff")
-        # Load this raster into a pysheds grid
-        c_grid = Grid.from_raster(memfile.name)
-        c_dem = c_grid.read_raster(memfile.name)
-    
-    # Hydrological processing to refine the DEM for accurate flow direction and accumulation computation
-    t_pit_filled_dem = c_grid.fill_pits(c_dem)  # Fill pits
-    t_flooded_dem = c_grid.fill_depressions(t_pit_filled_dem)  # Fill depressions
-    t_inflated_dem = c_grid.resolve_flats(t_flooded_dem)  # Resolve flat areas
-    t_fdir = c_grid.flowdir(t_inflated_dem, dirmap=(64, 128, 1, 2, 4, 8, 16, 32))  # Compute flow direction
-    c_acc = c_grid.accumulation(t_fdir, dirmap=(64, 128, 1, 2, 4, 8, 16, 32))  # Compute flow accumulation
-    
-    # Extract river networks and clip them to the payload geometry, dissolve and explode for unique segments
-    t_extracted_river_network = c_grid.extract_river_network(t_fdir, c_acc > 500, dirmap=(64, 128, 1, 2, 4, 8, 16, 32))["features"]
-    if t_extracted_river_network == []:
-        t_extracted_river_network = c_grid.extract_river_network(t_fdir, c_acc > 100, dirmap=(64, 128, 1, 2, 4, 8, 16, 32))["features"]
-    if t_extracted_river_network == []:
-        return [shapely.Polygon()] * (len(to_snap_points_projected) - 1)
-    extracted_river_network = gpd.GeoDataFrame(t_extracted_river_network, crs=4326)
     candidate_rivers = gpd.clip(extracted_river_network, expand_bounds(gpd.GeoSeries([t_sub_polygon.envelope], crs=5641).to_crs(4326).total_bounds, 1.5)).dissolve().explode(index_parts=True).reset_index()
     
     # Nested function to extract drainage area polygons given a river point
@@ -224,18 +155,20 @@ def extract_polygons_edge(c_edge, upstream_polygon, payload, c_polygon_projected
     return snapped_polygons_differenced
 
 
-def extract_polygons_river(payload, rivers, cut_length=1000):
+def extract_polygons_river(payload, rivers, extracted_river_network, c_grid, t_fdir, cut_length):
     """
-    Analyzes river segments within a given polygon, computes projections and drainage areas,
-    and adjusts river ends to ensure they align with the polygon boundaries.
+    Analyzes river segments within a given polygon, computes drainage areas.
     
     Args:
-    payload (DataFrame): Contains necessary data like geometry, river info, and other specifics.
-    rivers (GeoDataFrame): Contains river data across multiple segments.
-    cut_length (int): Length of each segment of the river for processing.
+    payload (DataFrame): Limiting drainage polygon geometry, estuary, river id.
+    rivers (GeoDataFrame): River geometries.
+    extracted_river_network (GeoDataFrame): Extracted river network from DEM processing.
+    c_grid (pysheds.grid.Grid): Pysheds grid object from DEM processing.
+    t_fdir (numpy.ndarray): Flow direction array from DEM processing.
+    cut_length (int): Maximum length of each segment of the river for processing.
     
     Returns:
-    tuple: Contains two GeoDataFrames, one for projection polygons and another for drainage areas.
+    GeoDataFrame: Contains all sub-polygons and their associated river data.
     """
     # Project the payload polygon to EPSG:5641 for processing
     c_polygon = payload.geometry
@@ -278,10 +211,12 @@ def extract_polygons_river(payload, rivers, cut_length=1000):
     c_polygon_halves = [shapely.line_merge(x).segmentize(10) for x in c_polygon_halves]
     
     # Compute drainage polygons for each segment
-    t_polygons_da = extract_polygons_edge(c_river.iloc[0], shapely.Polygon(), payload, c_polygon_projected, c_polygon_halves, to_snap_points[0], to_snap_points_projected[0])
+    t_polygons_da = extract_polygons_edge(c_river.iloc[0], shapely.Polygon(), payload, c_polygon_projected, c_polygon_halves, 
+                                          to_snap_points[0], to_snap_points_projected[0], extracted_river_network, c_grid, t_fdir)
     polygons_da = [t_polygons_da]
     for i in range(1, c_river.shape[0]):
-        t_polygons_da = extract_polygons_edge(c_river.iloc[i], shapely.ops.unary_union(list(chain(*polygons_da[:i]))), payload, c_polygon_projected, c_polygon_halves, to_snap_points[i], to_snap_points_projected[i])
+        t_polygons_da = extract_polygons_edge(c_river.iloc[i], shapely.ops.unary_union(list(chain(*polygons_da[:i]))), payload, c_polygon_projected, c_polygon_halves, 
+                                              to_snap_points[i], to_snap_points_projected[i], extracted_river_network, c_grid, t_fdir)
         polygons_da += [t_polygons_da]
     
     # Helper function to compile polygon data into GeoDataFrame format
@@ -302,3 +237,52 @@ def extract_polygons_river(payload, rivers, cut_length=1000):
         polygons_da.loc[polygons_da[~polygons_da.geometry.isna()]["distance_from_estuary"].idxmin(), "geometry"] = c_polygon
     
     return polygons_da
+
+def extract_polygons_grid_cell(drainage_polygons, rivers, cut_length=1000):
+    """
+    Analyzes a DataFrame of drainage polygons associated with rivers by (estuary, id), computes 
+    drainage areas for each river in the DataFrame.
+    Expects all polygons to be in the vicinity (in grid cell) for loading combined DEM into memory.
+    
+    Args:
+    drainage_polygons (DataFrame): Drainage geometry, associated estuary, river ids.
+    rivers (GeoDataFrame): All river geometries.
+    cut_length (int): Maximum length of each segment of the river for processing.
+    
+    Returns:
+    list: List of GeoDataFrames (or none), one for each drainage polygon in the input DataFrame.
+    """
+    
+    # Load the DEM into a pysheds raster via rioxarray and a temporary file
+    with tempfile.NamedTemporaryFile() as memfile:
+        # Load and preprocess height profile within the bounding box of the sub-polygon, expanded by 1.2 units
+        t_height_profile = load_height_profile(expand_bounds(drainage_polygons.total_bounds, 1.2))
+        # Fill missing values, set no data value, and save as raster
+        t_height_profile.fillna(t_height_profile.max()).rio.write_nodata(-32767).rio.to_raster(memfile.name, driver="GTiff")
+        # Load this raster into a pysheds grid
+        c_grid = Grid.from_raster(memfile.name)
+        c_dem = c_grid.read_raster(memfile.name)
+    
+    # Hydrological processing to refine the DEM for accurate flow direction and accumulation computation
+    t_pit_filled_dem = c_grid.fill_pits(c_dem)  # Fill pits
+    t_flooded_dem = c_grid.fill_depressions(t_pit_filled_dem)  # Fill depressions
+    t_inflated_dem = c_grid.resolve_flats(t_flooded_dem)  # Resolve flat areas
+    t_fdir = c_grid.flowdir(t_inflated_dem, dirmap=(64, 128, 1, 2, 4, 8, 16, 32))  # Compute flow direction
+    c_acc = c_grid.accumulation(t_fdir, dirmap=(64, 128, 1, 2, 4, 8, 16, 32))  # Compute flow accumulation
+    
+    # Extract river networks and clip them to the payload geometry, dissolve and explode for unique segments
+    t_extracted_river_network = c_grid.extract_river_network(t_fdir, c_acc > 500, dirmap=(64, 128, 1, 2, 4, 8, 16, 32))["features"]
+    if t_extracted_river_network == []:
+        t_extracted_river_network = c_grid.extract_river_network(t_fdir, c_acc > 100, dirmap=(64, 128, 1, 2, 4, 8, 16, 32))["features"]
+    if t_extracted_river_network == []:
+        return [shapely.Polygon()] * (len(to_snap_points_projected) - 1)
+    extracted_river_network = gpd.GeoDataFrame(t_extracted_river_network, crs=4326)
+    
+    results = [None] * drainage_polygons.shape[0]
+    for i in range(drainage_polygons.shape[0]):
+        try: 
+            results[i] = extract_polygons_river(drainage_polygons.iloc[i], rivers, extracted_river_network, c_grid, t_fdir, cut_length)
+        except:
+            pass
+        
+    return results

@@ -21,7 +21,7 @@ grid_data = gpd.GeoDataFrame(grid_data.merge(grid_geoms, on = "CellID"))
 conn.close()
 
 # Import the fixed drainage polygons
-drainage_polygons = gpd.read_feather("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/drainage/raw/drainage_polygons.geojson")
+drainage_polygons = gpd.read_file("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/drainage/raw/drainage_polygons.geojson", engine="pyogrio")
 drainage_polygons_projected = drainage_polygons.to_crs(5641)
 drainage_polygons_gridded = grid_data.sjoin(gpd.GeoDataFrame(geometry = drainage_polygons_projected.centroid, index = drainage_polygons_projected.index), how = "right").dropna(subset = ["index_left"])
 
@@ -38,6 +38,9 @@ for idx in [idx for idx, val in update_set.items() if val is None]:
 # Combine update set
 drainage_polygons = pd.concat(update_set).reset_index(drop = True)
 
+# Read the river network
+rivers_brazil_shapefile = gpd.read_feather("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/river_network/shapefile.feather")
+
 # Join the polygons with the river network
 joined = drainage_polygons.sjoin(rivers_brazil_shapefile, how="left", predicate = "intersects")
 # Remove polygons with no corresponding river
@@ -47,7 +50,11 @@ joined["index_right"] = joined.apply(lambda x: tuple([int(x.index_right0), int(x
 # Calculate the intersection length
 joined["intersection_length"] = joined.apply(lambda x: x.geometry.intersection(rivers_brazil_shapefile.loc[x.index_right].geometry).length, axis = 1)
 # Assign drainage polygons to rivers with longest intersection
-joined_assignment = joined[["estuary", "river"]].iloc[joined.reset_index().groupby("index").intersection_length.idxmax()]
+tmp = joined.reset_index().groupby(["index", "estuary", "river"]).intersection_length.sum().groupby("index").idxmax()
+joined_assignment = pd.DataFrame({"estuary": tmp.apply(lambda x: x[1]),
+                                  "river": tmp.apply(lambda x: x[2])},
+                                 index = tmp.apply(lambda x: x[0]))
+
 
 # Join in the assignment and dissolve by river
 drainage_polygons = drainage_polygons.join(joined_assignment).to_crs(4326)

@@ -5,6 +5,9 @@ import sqlite3
 import sys
 from collections import defaultdict
 from itertools import chain
+import warnings
+
+warnings.filterwarnings("ignore")
 
 # Third-party imports for data handling and computation
 import geopandas as gpd
@@ -26,7 +29,7 @@ from multiprocessing import Pool
 # Local module imports for specific functionality
 sys.path.append("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/code")
 from data.preprocess.river_network import river_network, calculate_distance_from_estuary
-from data.preprocess.drainage_areas import fix_rivers_in_grid
+from data.preprocess.drainage_polygons.fix_ana_drainage_polygons import fix_rivers_in_grid
 
 # Database connection to fetch grid data
 conn = sqlite3.connect('/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/imagery/imagery.db')
@@ -49,34 +52,23 @@ rivers_brazil_shapefile = gpd.read_feather("/pfs/work7/workspace/scratch/tu_zxob
 rivers_brazil_topology = gpd.read_feather("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/river_network/topology.feather")
 rivers_brazil_shapefile = calculate_distance_from_estuary(rivers_brazil_shapefile, rivers_brazil_topology)
 
-# Preparing digital elevation model data
-filedir_dem_cop = "/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/misc/raw/DEM_GLO-90/"
-files_dem_cop = pd.Series(os.listdir(filedir_dem_cop))
-files_dem_cop = files_dem_cop[~files_dem_cop.str.contains(r"\.tar$")]
-files_dem_cop = files_dem_cop.map(lambda x: f"{filedir_dem_cop}{x}/DEM/{x}_DEM.tif")
-mfdataset = [rxr.open_rasterio(file, chunks=True)[0,:-1,:-1] for file in files_dem_cop]
-height_profile = xr.combine_by_coords(mfdataset)
-
 # Reading and processing drainage areas
 drainage_polygons = gpd.read_feather("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/drainage_area.feather")
 drainage_polygons_projected = drainage_polygons.to_crs(5641)
 drainage_polygons_gridded = grid_data.sjoin(gpd.GeoDataFrame(geometry=drainage_polygons_projected.centroid, index=drainage_polygons_projected.index), how="right").dropna(subset=["index_left"])
 
 # Checking for previously saved work and updating the grid calculations
-if os.path.exists(f"/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/river_network/temp_update_set.pkl"):
-    with open(f"/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/river_network/temp_update_set.pkl", "rb") as f:
-        update_set = pickle.load(f)    
-else:
-    update_set = {key: None for key in drainage_polygons_gridded.index_left.unique()}
+
+processed_grid_cells = os.listdir("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/drainage/temp_fixed_grid_cells")
+processed_grid_cells = [int(i.split(".")[0]) for i in processed_grid_cells]
     
 def wrapper(i):
     try:
-        return fix_rivers_in_grid(i, rivers_brazil_shapefile, rivers_brazil_topology, drainage_polygons, drainage_polygons_gridded, height_profile)
-    except:
-        return None
-
-for idx, i in tqdm(enumerate([key for key, value in update_set.items() if value is None])):
-    update_set[i] = wrapper(i)
-    if idx % 10 == 0:  # Assuming the intent was to save periodically based on iterations, not the index 'i'
-        with open(f"/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/river_network/temp_update_set.pkl", "wb") as f:
+        update_set = fix_rivers_in_grid(i, rivers_brazil_shapefile, rivers_brazil_topology, drainage_polygons, drainage_polygons_gridded)
+        with open(f"/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/drainage/temp_fixed_grid_cells/{i}.pkl", "wb") as f:
             pickle.dump(update_set, f)
+    except:
+        pass
+    
+with Pool(int(os.environ["SLURM_CPUS_PER_TASK"])) as p:
+    p.map(wrapper, [i for i in grid_data.CellID if i not in processed_grid_cells])

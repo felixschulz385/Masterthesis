@@ -163,5 +163,22 @@
                 "citation": "Base Hidrográfica Ottocodificada 2017 50K - área de drenagem, Agência Nacional de Águas Saneamento Básico, https://arcg.is/HrTrD",
                 "path": "data/drainage/",
                 "setup": "dl"
+        },
+        {
+                "id": "dng_ana_trench",
+                "name": "Drainage Trenches (ANA)",
+                "notes": "https://metadados.snirh.gov.br/geonetwork/srv/eng/catalog.search#/metadata/0c698205-6b59-48dc-8b5e-a58a5dfcc989",
+                "citation": "Base Hidrográfica Ottocodificada 2017 50K, Agência Nacional de Águas Saneamento Básico, https://arcg.is/HrTrD",
+                "url": "https://metadados.snirh.gov.br/files/0c698205-6b59-48dc-8b5e-a58a5dfcc989/geoft_bho_2017_trecho_drenagem.gpkg",
+                "path": "data/drainage/geoft_bho_2017_trecho_drenagem.gpkg",
+                "setup": "dl"
+        },
+        {
+                "id": "dng_ana_coast",
+                "name": "Hydrographic Base (ANA)",
+                "citation": "Base Hidrográfica Ottocodificada 2017 50K, Agência Nacional de Águas Saneamento Básico, https://arcg.is/1vqzvH",
+                "url": "https://metadados.snirh.gov.br/files/0c698205-6b59-48dc-8b5e-a58a5dfcc989/geoft_bho_2017_linha_costa.gpkg",
+                "path": "data/drainage/geoft_bho_2017_linha_costa.gpkg",
+                "setup": "dl"
         }
 ]
