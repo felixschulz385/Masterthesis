@@ -4,6 +4,7 @@
 *.tar
 *.zip
 *.pyc
+.DS_Store
 data/*/**
 aux/
 output/documents/*/*/**

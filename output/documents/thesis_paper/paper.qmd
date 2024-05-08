@@ -22,7 +22,6 @@ In the research proposed in this essay I seek to shed a light on the importance 
 
 The impact of deforestation on health outcomes has been subject of several publications [@ellwangerDiversityLossClimate2020; @reddingtonAirQualityHuman2015]. The costs of soil erosion were also discussed in a broad range of literature [see for example @tellesCostsSoilErosion2011]. @NBERw31410 provide an excellent review on the economics of deforestation. Soil erosion as a driver of pollution and pollution-induced health costs has to the best of knowledge only been covered in a small-scale fashion by @maHumanHealthRisk2014 and therefore remains a gap in the research. 
 
-The remainder of this proposal is structured as follows: In the next section I review literature on the economics of deforestation and outline the existing policy framework to establish the importance of the study at hand. I then further introduce the mechanism of how deforestation may impact public health through soil erosion. In the final section I give an overview on how I envision the research project to proceed.
 
 # Literature Review
 
@@ -58,27 +57,15 @@ Extending the context to a more wholistic view on social costs in general, in ad
 
 I seek to add to this literature on a larger scale by observing health outcomes and deforestation alongside its mediating factors using remote-sensing data.
 
-# Research Outline
+# Data
 
-The aim of the proposed paper is to show a connection between deforestation and downstream health impacts. Above I established a model of potential touchpoints at which health impacts may be measured or proxied for. The first step of research will be to evaluate the feasibility to obtain data. Next up the data has to be collected and descriptive statistics calculated. Finally I want to estimate (spatial) regression models to quantify the damage of deforestation-conditioned soil erosion.
+# Methodology
 
-## Data
+@assuncaoDETERingDeforestationAmazon2023 show that enforcement of conservation laws is driven by satellite imagery. If high levels of cloud cover at a given forest site regularly prohibit remote sensing, this may impact deforestation but is potentially exogenous to any public health outcomes downstream.
 
-My initial focus will lie on getting a comprehensive spatiotemporal panel of land cover change to observe deforestation and alternative use over time. Existing products like the Sentinel 2-derived Land Use Time Series by [Esri](https://www.arcgis.com/home/item.html?id=cfcb7609de5f478eb7666240902d4d3d) or [Copernicus](https://land.copernicus.eu/global/products/lc) may provide entry points but only go  as far back in time as 2017 and 2015 respectively. To allow for more nuanced analyses I seek to train and benchmark a range of Neural Networks and predict land cover maps for all Landsat 7 imagery since 1999. Candidate Networks are EfficientNet [@tanEfficientNetRethinkingModel2020a] and EfficientTransformer [@xuEfficientTransformerRemote2021].
+# Empirical Results
 
-A substantially harder challenge will be the acquisition of outcome indicators. Water quality measurement points across Brazil are sparse. I want to evaluate in how far machine learning may help estimate river pollution. Furthermore, there does to the best of my knowledge not exist a comprehensive database of drinking water quality. It may be possible to proxy this by expenditure on water treatment. The availability of data in this domain is however also questionable. The Brazilian government does record annual mortality statistics which I may use in addition to health surveys. The availability of geolocated survey data with sufficient variation for inference is however also uncertain.
-
-## Methodology
-
-If data on outcomes are successfully collected, I may then proceed to derive measurements of deforestation and alternative use and aggregate them along rivers. These variable can then be used in econometric regression models to estimate coefficients for the impact of erosion on public health. Mediating factors for the mechanism of erosion are the kind of alternative use, slope of terrain and general soil type present [@pimentelEnvironmentalEconomicCosts1995]. These may be used as interaction terms in the regressions. 
-
-Finally, if the spatial setup and scale of analysis at hand does not already yield causal evidence, an instrumental variables strategy may be explored. @assuncaoDETERingDeforestationAmazon2023 show that enforcement of conservation laws is driven by satellite imagery. If high levels of cloud cover at a given forest site regularly prohibit remote sensing, this may impact deforestation but is potentially exogenous to any public health outcomes downstream.
-
-## Discussion
-
-After the statistical research has concluded I want to discuss the findings in an economic context. I want to look into possible implications on policy and provide visualization of my findings.
-
-# Conclusion
+# Conclusions
 
 The rainforests of the Amazon are under significant threat due to deforestation, with alarming consequences both locally and globally. While deforestation presents short-term economic benefits, it also brings with it considerable social costs, including impacts on climate change and detrimental health outcomes for local communities. 
 
@@ -90,3 +77,8 @@ Should the findings validate the hypothesis, they would underscore the broader r
 
 :::{#refs}
 :::
+
+# Methodological Appendix {.appendix}
+
+## Hydrological Model
+
