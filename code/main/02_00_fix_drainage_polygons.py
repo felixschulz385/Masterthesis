@@ -68,7 +68,7 @@ def wrapper(i):
         with open(f"/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/drainage/temp_fixed_grid_cells/{i}.pkl", "wb") as f:
             pickle.dump(update_set, f)
     except:
-        pass
+        pass  
     
 with Pool(int(os.environ["SLURM_CPUS_PER_TASK"])) as p:
-    p.map(wrapper, [i for i in grid_data.CellID if i not in processed_grid_cells])
+    p.map(wrapper, [i for i in grid_data.index if i not in processed_grid_cells])

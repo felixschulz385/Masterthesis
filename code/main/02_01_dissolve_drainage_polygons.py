@@ -1,13 +1,10 @@
+import os
 import pickle
 import sqlite3
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-
-import sys
-sys.path.append("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/code")
-from data.preprocess.river_network import river_network, calculate_distance_from_estuary
-from data.preprocess.drainage_polygons.extract_detailed_drainage_polygons import extract_polygons_river, expand_bounds
+import shapely
 
 # connect to database
 conn = sqlite3.connect('/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/imagery/imagery.db')
@@ -21,22 +18,13 @@ grid_data = gpd.GeoDataFrame(grid_data.merge(grid_geoms, on = "CellID"))
 conn.close()
 
 # Import the fixed drainage polygons
-drainage_polygons = gpd.read_file("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/drainage/raw/drainage_polygons.geojson", engine="pyogrio")
-drainage_polygons_projected = drainage_polygons.to_crs(5641)
-drainage_polygons_gridded = grid_data.sjoin(gpd.GeoDataFrame(geometry = drainage_polygons_projected.centroid, index = drainage_polygons_projected.index), how = "right").dropna(subset = ["index_left"])
+fixed_grid_cells_list = os.listdir("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/drainage/temp_fixed_grid_cells")
+fixed_grid_cells = [pickle.load(open(f"/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/drainage/temp_fixed_grid_cells/{fixed_grid_cells_list[i]}", "rb")) for i in range(len(fixed_grid_cells_list))]
+drainage_polygons = gpd.GeoDataFrame(pd.concat(fixed_grid_cells)).reset_index(drop = True)
+drainage_polygons["geometry"] = drainage_polygons.geometry.buffer(0)
 
-# Import the raw update set
-with open("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/river_network/temp_update_set.pkl", "rb") as f:
-    update_set = pickle.load(f)
-    
-# there was a bug in the script for the 10hr run of the fix
-# if there was no polygon to fix in a given grid cell, the script returned None
-# this bug is now fixed for future re-runs; I impute these values here
-for idx in [idx for idx, val in update_set.items() if val is None]:
-    update_set[idx] = drainage_polygons.loc[drainage_polygons_gridded.index[drainage_polygons_gridded.index_left == idx].values].to_crs(5641)
-
-# Combine update set
-drainage_polygons = pd.concat(update_set).reset_index(drop = True)
+# Save the fixed drainage polygons
+drainage_polygons.to_feather("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/drainage/drainage_polygons.feather")
 
 # Read the river network
 rivers_brazil_shapefile = gpd.read_feather("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/river_network/shapefile.feather")
@@ -55,11 +43,59 @@ joined_assignment = pd.DataFrame({"estuary": tmp.apply(lambda x: x[1]),
                                   "river": tmp.apply(lambda x: x[2])},
                                  index = tmp.apply(lambda x: x[0]))
 
-
 # Join in the assignment and dissolve by river
 drainage_polygons = drainage_polygons.join(joined_assignment).to_crs(4326)
 drainage_polygons["geometry"] = drainage_polygons.geometry.buffer(0)
 drainage_polygons_dissolved = drainage_polygons.dissolve(["estuary", "river"]).reset_index()
+
+drainage_polygons.to_feather("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/code/experiments/test.feather")
+
+
+## Split large polygons (RAM bottleneck)
+
+# Identify large polygons
+drainage_polygons_dissolved["too_large"] = gpd.GeoSeries(drainage_polygons_dissolved.bounds.apply(lambda x: shapely.box(*x), axis=1)).area > 1
+
+# Filter out those polygons that are too large
+to_fix = drainage_polygons_dissolved[drainage_polygons_dissolved.too_large].copy()
+drainage_polygons_dissolved = drainage_polygons_dissolved[~drainage_polygons_dissolved.too_large]
+drainage_polygons_dissolved.drop(columns="too_large", inplace=True)
+
+# Split large polygons
+to_append = []
+for c_estuary, c_river in zip(to_fix.estuary, to_fix.river):
+    # Query the polygons and rivers
+    t_query_polygons = drainage_polygons.query(f"estuary == {c_estuary} and river == {c_river}").to_crs(5641)
+    t_query_river = rivers_brazil_shapefile.query(f"estuary == {c_estuary} and river == {c_river}").sort_values("segment").dissolve()
+
+    # Sort the polygons by distance along the river
+    t_query_polygons["distance_along_river"] = t_query_polygons.centroid.apply(lambda x: t_query_river.project(x))
+    t_query_polygons = t_query_polygons.sort_values("distance_along_river")
+    
+    # Prepare the polygons for grouping
+    t_query_polygons["dissolve_group"] = None
+    t_query_polygons = t_query_polygons.to_crs(4326)
+    t_group = 0
+    t_query_polygons["cumulative_bbox"] = t_query_polygons.bounds.apply(lambda x: shapely.box(*x), axis = 1)
+    t_query_polygons.loc[:,"dissolve_group"].iloc[0] = t_group
+
+    # Iterate over the polygons, build groups with cumulative bounding box area < 1
+    for i in range(1, len(t_query_polygons)):
+        t_bbox = shapely.box(*t_query_polygons.cumulative_bbox.iloc[i-1].union(t_query_polygons.cumulative_bbox.iloc[i]).bounds)
+        if t_bbox.area < 1:
+            t_query_polygons.iloc[i, t_query_polygons.columns.get_loc("cumulative_bbox")] = t_bbox
+            t_query_polygons.iloc[i, t_query_polygons.columns.get_loc("dissolve_group")] = t_group
+        else:
+            t_group += 1
+            t_query_polygons.iloc[i, t_query_polygons.columns.get_loc("dissolve_group")] = t_group
+    # Fix and dissolve the polygons
+    t_query_polygons["geometry"] = t_query_polygons.buffer(0)
+    t_query_polygons = t_query_polygons.dissolve("dissolve_group")
+    # Append the fixed polygons to the list
+    to_append.append(t_query_polygons.loc[:,["estuary", "river", "geometry"]].reset_index(drop=True))
+
+# Concatenate the fixed polygons
+drainage_polygons_dissolved = pd.concat([drainage_polygons_dissolved] + to_append).reset_index(drop=True)
 
 # Filter out those polygons for which their centroid does not intersect the grid data
 drainage_polygons_dissolved_filtered = drainage_polygons_dissolved[drainage_polygons_dissolved.centroid.intersects(grid_data.to_crs(4326).unary_union)].copy()

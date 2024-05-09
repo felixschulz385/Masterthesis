@@ -14,7 +14,9 @@ import tempfile
 from tqdm import tqdm
 import warnings
 
-
+import sys
+sys.path.append("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/code")
+from data.preprocess.drainage_polygons.aux_functions import expand_bounds, load_height_profile
 
 def get_sub_polygon(query_points, c_polygon_halves):
     """
