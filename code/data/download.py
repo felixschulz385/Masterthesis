@@ -1,23 +1,29 @@
 # Standard library imports
 import os
 import time
+from time import sleep
 import re
+import requests
 import tarfile
 import zipfile
 import urllib.request
 import json
+from functools import partial
+from itertools import compress
 
 # Third-party library imports
+import pandas as pd
 import geopandas as gpd
 import shapely
 from tqdm import tqdm
 from multiprocessing import Pool
-import ee
-
-# Specific imports
-from functools import partial
-from itertools import compress
-import requests
+#import ee
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.service import Service as ChromeService
+from webdriver_manager.chrome import ChromeDriverManager
 
 class DataAgent:
     """
@@ -104,6 +110,100 @@ class download_agent:
                     tarfile.open(self.root_dir + dataset["path"] + "/" + row.filename, "r").extractall(self.root_dir + dataset["path"])
                 except:
                     pass
+                
+        def fe_wq_ana(dataset):
+            
+            # Check if the queries.json file already exists in the specified path
+            if not os.path.exists(f"{self.root_dir}data/water_quality/queries.json"):
+                # Load geographic data of stations from a Feather file
+                stations_geo = gpd.read_feather(f"{self.root_dir}data/water_quality/stations.feather")
+                
+                # Filter stations where 'TipoEstacaoQualAgua' equals 1 and select only the 'Codigo' column
+                stations_to_query = stations_geo.loc[stations_geo["TipoEstacaoQualAgua"] == 1, ["Codigo"]]
+                
+                # Initialize a new column 'success' with None values to track query success
+                stations_to_query.loc[:, "success"] = None
+                
+                # Reset the index for a clean DataFrame and set 'Codigo' as the new index
+                stations_to_query = stations_to_query.reset_index(drop=True).set_index("Codigo")
+                
+                # List all files in the raw data directory
+                existing_files = os.listdir(f"{self.root_dir}data/water_quality/raw")
+                
+                # Extract numeric IDs from the file names and filter unique IDs
+                existing_file_ids = pd.Series(existing_files).str.extract(r"(^\d*)").squeeze().astype(int).unique()
+                
+                # Update the 'success' status for stations where corresponding raw data files exist
+                stations_to_query.loc[existing_file_ids, "success"] = True
+
+                # Save the DataFrame to a JSON file for later use
+                stations_to_query.to_json(f"{self.root_dir}data/water_quality/queries.json")
+                
+            stations_to_query = pd.read_json(f"{self.root_dir}data/water_quality/queries.json")
+            
+            downloadPath = f"{self.root_dir}data/water_quality/raw"
+            os.makedirs(downloadPath, exist_ok=True)
+
+            # docker run -d -p 4444:4444 -p 7900:7900 -v "/home/ubuntu/ext_drive/scraping/Masterthesis/data/water_quality/raw":"/home/seluser/downloads" --shm-size="2g" selenium/standalone-chrome:latest
+            options = webdriver.ChromeOptions()
+            options.add_argument('--ignore-ssl-errors=yes')
+            options.add_argument('--ignore-certificate-errors')
+            #options.add_argument('--headless')
+            options.add_argument("--disable-extensions") 
+            options.add_argument("--disable-gpu") 
+
+            prefs = {}
+            prefs["profile.default_content_settings.popups"]=0
+            prefs["download.default_directory"]="/home/seluser/downloads"
+            options.add_experimental_option("prefs", prefs)
+            # Connect to the WebDriver
+            driver = webdriver.Remote(command_executor='http://localhost:4444/wd/hub', options=options)
+            
+            def download_by_ID(id, driver):
+                n_tries = 0
+                while n_tries < 5:
+                    n_tries += 1
+                    
+                    try:
+                        # clear field
+                        driver.find_element(By.XPATH, '//button[@type="reset"]').click()
+                        sleep(.5)
+                        # enter ID
+                        driver.find_element(By.XPATH, '//*[@name="codigoEstacao"]').send_keys(str(id))
+                        sleep(.5)
+                        # click to search
+                        driver.find_element(By.XPATH, '//button[@color="primary"]').click()
+                        # wait for results to load
+                        element = WebDriverWait(driver, 20).until(
+                            EC.presence_of_element_located((By.XPATH, '//td[contains(@class, "mat-column-csv")]/button'))
+                        )
+                        # download csv
+                        element.click()
+                        sleep(1)
+                        return 1
+                    except:
+                        sleep(1)
+                        if ((n_tries == 2) | (n_tries == 4)):
+                            disconnected = True
+                            while disconnected:
+                                try:
+                                    driver.get("https://www.snirh.gov.br/hidroweb/serieshistoricas")
+                                    WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.XPATH, '//button[@type="reset"]')))
+                                    disconnected = False
+                                except:
+                                    pass
+                return 0
+            
+            driver.get("https://www.snirh.gov.br/hidroweb/serieshistoricas")
+            WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.XPATH, '//button[@type="reset"]')))
+
+            indices_to_fetch = stations_to_query[stations_to_query.success.isna()].index
+            for idx in tqdm(range(len(indices_to_fetch))):
+                stations_to_query.loc[indices_to_fetch[idx], "success"] = download_by_ID(indices_to_fetch[idx], driver)
+                if idx % 10 == 0:
+                    stations_to_query.to_json(f"{self.root_dir}data/water_quality/queries.json")
+            
+            driver.close()
                 
         def fe_mb_mo(dataset):
             """
@@ -323,3 +423,7 @@ class download_agent:
                 # Extract downloaded ZIP file
                 with zipfile.ZipFile(self.root_dir + f"data/DTM/raw/srtm_{lon}_{lat}.zip", 'r') as zip_ref:
                     zip_ref.extractall(self.root_dir + "data/DTM")
+                    
+if __name__ == "__main__":
+    test = download_agent("/home/ubuntu/ext_drive/scraping/Masterthesis/")
+    test.fetch({"setup": "fe_wq_ana", "path": "data/water_quality"})
