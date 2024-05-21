@@ -30,10 +30,11 @@ from multiprocessing import Pool
 # Local module imports for specific functionality
 sys.path.append("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/code")
 from data.preprocess.river_network import river_network, calculate_distance_from_estuary
-from data.preprocess.drainage_polygons.extract_detailed_drainage_polygons import extract_polygons_grid_cell
+from data.preprocess.drainage_polygons.extract import extract_polygons_grid_cell
 
 # A function to calculate a drainage area
 def worker(grid_cell_index, drainage_polygons_dissolved, rivers_brazil_shapefile, grid_data_projected):
+    print(f"--- Processing grid cell {grid_cell_index} ---")
     tmp = drainage_polygons_dissolved[drainage_polygons_dissolved.centroid.within(grid_data_projected.geometry.iloc[grid_cell_index])]
     if tmp.empty:
         return

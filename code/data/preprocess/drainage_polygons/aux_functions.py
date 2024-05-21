@@ -18,7 +18,7 @@ def expand_bounds(bounds, factor = 1.5):
     return [bounds[0] - (bounds[2] - bounds[0]) * (factor - 1) / 2, bounds[1] - (bounds[3] - bounds[1]) * (factor - 1) / 2, bounds[2] + (bounds[2] - bounds[0]) * (factor - 1) / 2, bounds[3] + (bounds[3] - bounds[1]) * (factor - 1) / 2]
 
 
-def load_height_profile(bbox, dem_path = "/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/misc/raw/DEM_GLO-90/"):
+def load_height_profile(bbox, polygon = None, dem_path = "/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/misc/raw/DEM_GLO-90/"):
     """
     Load and return the height profile for a given bounding box.
 
@@ -31,11 +31,20 @@ def load_height_profile(bbox, dem_path = "/pfs/work7/workspace/scratch/tu_zxobe2
 
     # Generate file path suffixes for latitude and longitude using grid conventions
     # Latitudes and longitudes are formatted based on their hemisphere and rounded to the nearest degree
-    lat_lon = product(
-        [f"E{int(lat):03}" if lat >= 0 else f"W{-int(lat):03}" for lat in np.arange(np.floor(bbox[0]), np.ceil(bbox[2]), 1)],
-        [f"N{int(lon):02}" if lon >= 0 else f"S{-int(lon):02}" for lon in np.arange(np.floor(bbox[1]), np.ceil(bbox[3]), 1)]
-    )
-
+    lat_lon = list(product(
+        [lat for lat in np.arange(np.floor(bbox[0]), np.ceil(bbox[2]), 1)],
+        [lon for lon in np.arange(np.floor(bbox[1]), np.ceil(bbox[3]), 1)]
+    ))
+    
+    # Filter out files that do not intersect the polygon
+    if polygon is not None:
+        lat_lon = filter(lambda x: shapely.box(x[0], x[1], x[0] + 1, x[1] + 1).intersects(polygon), lat_lon)
+    
+    lat_lon = [
+        (f"E{int(lat):03}" if lat >= 0 else f"W{-int(lat):03}", 
+         f"N{int(lon):02}" if lon >= 0 else f"S{-int(lon):02}") for lat, lon in lat_lon
+    ]
+    
     # Construct file paths for DEM (Digital Elevation Model) tiles within the bounding box
     files_dem_cop = [
         f"{dem_path}Copernicus_DSM_30_{lon}_00_{lat}_00/DEM/Copernicus_DSM_30_{lon}_00_{lat}_00_DEM.tif"
