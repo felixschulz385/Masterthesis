@@ -4,10 +4,13 @@
 *.tar
 *.zip
 *.pyc
+*.html
 .DS_Store
 data/*/**
 aux/
 output/documents/*/*/**
+output/presentations/update/images/**
+output/presentations/update/update_files/**
 .DS_Store
 data/*/**
 api_creds
