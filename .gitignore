@@ -1,4 +1,10 @@
 *.tif
+*.feather
+*.log
+*.out
+*.pkl
+*.geojson
+*.sqsh
 *.TIF
 *.pdf
 *.tar

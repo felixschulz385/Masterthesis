@@ -255,11 +255,11 @@ def split_polygon(rivers, drainage_polygons, c_payload):
         t_clip[confluence_idx] = c_drainage_polygon.intersection(query_points.loc[t_idx_top_score].drainage_polygons[t_idx_polygon_to_clip])
   
     # get the residual area left in the drainage polygon when differencing out all clipped polygons
-    t_residual = [c_drainage_polygon.difference(shapely.ops.unary_union(t_clip))]
-    # clean residual: remove small polygons
-    if isinstance(t_residual[0], shapely.geometry.multipolygon.MultiPolygon):
-        t_residual = np.array(t_residual[0].geoms)[np.array([x.area > .1 * c_drainage_polygon.area for x in t_residual[0].geoms])].tolist()
-        #t_residual[0] = t_residual[0].buffer(0)
+    t_residual = [c_drainage_polygon.difference(shapely.ops.unary_union(t_clip)).buffer(0)]
+    # # clean residual: remove small polygons
+    # if isinstance(t_residual[0], shapely.geometry.multipolygon.MultiPolygon):
+    #     t_residual = np.array(t_residual[0].geoms)[np.array([x.area > .1 * c_drainage_polygon.area for x in t_residual[0].geoms])].tolist()
+    #     #t_residual[0] = t_residual[0].buffer(0)
     
     if not any(t_clip):
         return t_residual
