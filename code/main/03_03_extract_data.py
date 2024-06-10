@@ -10,6 +10,7 @@ import xarray as xr
 import rioxarray as rxr
 
 from tqdm import tqdm
+import multiprocessing as mp
 
 import sys
 sys.path.append("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/code")
@@ -31,13 +32,13 @@ def extract(x, x_1):
  
     
 def worker(payload):
-    #print(f"*** Processing grid_id: {payload[0]} at {datetime.now().strftime('%H:%M:%S')} ***")
+    print(f"*** Processing grid_id: {payload[0]} at {datetime.now().strftime('%H:%M:%S')} ***")
 
     # load extraction masks
     polygons_raster = pickle.load(open(f"/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/drainage/temp_extraction_masks/{payload[0]}.pkl", "rb"))
 
      # extract raw pixel values
-    c_extracted = {i: payload[2].values[:,polygons_raster[i].astype(bool).todense()] for i in range(len(polygons_raster))}
+    c_extracted = {i: payload[2][:,polygons_raster[i].astype(bool).todense()] for i in range(len(polygons_raster))}
     
     out_df = pd.DataFrame()  
     for year in range(1986, 2023):
@@ -66,7 +67,7 @@ def worker(payload):
         # merge dataframes
         merged_df = pd.concat([lc_df, df_df], axis=1).astype(np.uint32)
         # add year and grid_id
-        merged_df["year"] = year; merged_df["grid_id"] = grid_id
+        merged_df["year"] = year; merged_df["grid_id"] = payload[0]
         # set index
         out_df = pd.concat([out_df, merged_df.reset_index().set_index(["grid_id", "index"])])
     
@@ -84,31 +85,64 @@ def main():
     
     # 
     files = os.listdir("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/land_cover/temp_extracted_land_cover")
-    files = pd.Series(files).str.extract(r"(^\d*)").squeeze().astype(int).unique()
+    files = pd.Series(files)[pd.Series(files).str.contains(r"^\d+")].str.extract(r"(^\d+)").squeeze().astype(int).unique()
     extract_indices = extracted_drainage_polygons.index.get_level_values(0).unique()
     extract_indices = np.array([extract_indices for extract_indices in extract_indices if extract_indices not in files])
-        
-    # create chunks of size 8
-    chunks = np.array_split(extract_indices, np.floor(extract_indices.size / 8))
     
-    # iterate over chunks
-    for chunk in chunks:
-        # prepare data for multiprocessing
-        data = [[grid_id, extracted_drainage_polygons.loc[grid_id].index, {}] for grid_id in chunk]
+    def load_data(grid_id):
+        data = [grid_id, extracted_drainage_polygons.loc[grid_id].index, {}]
         
         for year in range(1985, 2023):
             # load land cover data    
             with rxr.open_rasterio(f"/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/land_cover/raw/lc_mapbiomas8_30/mapbiomas_brasil_coverage_{year}.tif", chunks=True).squeeze() as lc_t:       
-                for idx, grid_id in enumerate(chunk):
-                    # clip land cover data
-                    data[idx][2][year] = lc_t.rio.clip_box(*expand_bounds(extracted_drainage_polygons.loc[grid_id].total_bounds)).load()
+                data[2][year] = lc_t.rio.clip_box(*expand_bounds(extracted_drainage_polygons.loc[grid_id].total_bounds))
         
-        for idx, grid_id in enumerate(chunk):
-            data[idx][2] = xr.concat(data[idx][2].values(), pd.Index(data[idx][2].keys(), name = "year"))
-        
-        # run multiprocessing
-        with Pool(8) as p:
-            p.map(worker, data)
+        data[2] = xr.concat(data[2].values(), pd.Index(data[2].keys(), name = "year")).values
+        return data
+            
+    def producer_task(task_queue, data_queue, load_semaphore):
+        for grid_id in extract_indices:
+            load_semaphore.acquire()  # Ensure only one load operation at a time
+            data = load_data(grid_id)
+            data_queue.put(data)
+            #load_semaphore.release()
+
+    def consumer_task(data_queue, load_semaphore, result_queue):
+        while True:
+            data = data_queue.get()
+            if data is None:
+                break
+            worker(data)
+            load_semaphore.release()  # Signal that a dataset slot is free
+            
+    # Queues
+    max_workers = int(os.getenv("SLURM_CPUS_PER_TASK", 8)) - 1
+    data_queue = mp.Queue(maxsize=max_workers)
+
+    # Semaphore to control the number of datasets in memory
+    load_semaphore = mp.Semaphore(max_workers)
+
+    # Create and start the producer process
+    producer = mp.Process(target=producer_task, args=(data_queue, data_queue, load_semaphore))
+    producer.start()
+
+    # Create and start the consumer processes
+    consumers = []
+    for _ in range(max_workers):
+        consumer = mp.Process(target=consumer_task, args=(data_queue, load_semaphore))
+        consumer.start()
+        consumers.append(consumer)
+
+    # Wait for the producer to finish
+    producer.join()
+
+    # Signal consumers to stop
+    for _ in range(num_processors):
+        data_queue.put(None)
+
+    # Wait for the consumers to finish
+    for consumer in consumers:
+        consumer.join()
 
 if __name__ == "__main__":
     
