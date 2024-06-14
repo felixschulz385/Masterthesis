@@ -5,6 +5,8 @@ from tqdm import tqdm
 import pandas as pd
 import geopandas as gpd
 import networkx as nx
+import shelve
+
 
 def create_graph(edge_list):
     """ Create a directed graph from a list of edges. """
@@ -46,24 +48,18 @@ def compute_reachability_parallel(graph):
         # Turn frozensets back into sets
         results = [set(x) for x in results]
         # Return the results as a dictionary
-        return dict(zip(nodes, results))
+        return zip(nodes, results)
 
 if __name__ == '__main__':
     # Import the river network shapefile
     rivers_brazil_shapefile = gpd.read_feather("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/river_network/shapefile.feather")
     
-    # Create an empty dictionary to store the reachability
-    reachability = {}
-    
     # Iterate over all estuaries
-    n = 0
     for i in tqdm(rivers_brazil_shapefile.estuary.dropna().unique()):
         edges = rivers_brazil_shapefile.query(f"estuary=={i}").copy().loc[:, ["downstream_node_id", "upstream_node_id"]].dropna().values
         # Create the graph
         G = create_graph(edges)
         # Compute the reachability
-        reachability |= compute_reachability_parallel(G)
-        n += 1
-        if n % 100 == 0:
-            # Save the reachability to a file
-            pd.Series(reachability).to_json("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/river_network/reachability.json")
+        with shelve.open("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/river_network/reachability.db") as reachability:
+            for x in compute_reachability_parallel(G):
+                reachability[str(int(x[0]))] = x[1] 

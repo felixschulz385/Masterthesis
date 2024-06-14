@@ -180,5 +180,13 @@
                 "url": "https://metadados.snirh.gov.br/files/0c698205-6b59-48dc-8b5e-a58a5dfcc989/geoft_bho_2017_linha_costa.gpkg",
                 "path": "data/drainage/geoft_bho_2017_linha_costa.gpkg",
                 "setup": "dl"
+        },
+        {
+                "id": "cc_cop_clara",
+                "name": "Copernicus Climate Data Store - CLARA-A3",
+                "citation": "Karlsson, K.G., Riihelä, A., Trentmann, J., Stengel, M., Solodovnik, I., Meirink, J.F., Devasthale, A., Jääskeläinen, E., Kallio-Myers, V., Eliasson, S., Benas, N., Johansson, E., Stein, D., Finkensieper, S., Håkansson, N., Akkermans, T., Clerbaux, N., Selbach, N., Schröder, M., Hollmann, R. (2023): CLARA-A3: CM SAF cLoud, Albedo and surface RAdiation dataset from AVHRR data - Edition 3, Satellite Application Facility on Climate Monitoring, DOI: 10.5676/EUM_SAF_CM/CLARA_AVHRR/V003",
+                "notes": "https://cds.climate.copernicus.eu/cdsapp#!/dataset/satellite-cloud-properties?tab=overview",
+                "path": "data/cloud_cover/raw/download.zip",
+                "setup": "fe_cc_co"
         }
 ]

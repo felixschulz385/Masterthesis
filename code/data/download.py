@@ -24,6 +24,7 @@ from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
+import cdsapi
 
 class DataAgent:
     """
@@ -112,6 +113,9 @@ class download_agent:
                     pass
                 
         def fe_wq_ana(dataset):
+            """
+            Fetch (scrape) water quality data from the SNIRH website.
+            """           
             
             # Check if the queries.json file already exists in the specified path
             if not os.path.exists(f"{self.root_dir}data/water_quality/queries.json"):
@@ -204,7 +208,55 @@ class download_agent:
                     stations_to_query.to_json(f"{self.root_dir}data/water_quality/queries.json")
             
             driver.close()
-                
+        
+        def fe_cc_co(dataset):
+            """
+            Fetch Copernicus Cloud Cover data
+            
+            Note: Requires a Copernicus Climate Data Store account and API key installed on the device.
+            """
+            
+            # Create a CDS API client
+            c = cdsapi.Client()
+            # Retrieve the data
+            c.retrieve(
+                'satellite-cloud-properties',
+                {
+                    'format': 'zip',
+                    'product_family': 'clara_a3',
+                    'origin': 'eumetsat',
+                    'variable': 'cloud_fraction',
+                    'climate_data_record_type': 'thematic_climate_data_record',
+                    'time_aggregation': 'monthly_mean',
+                    'year': [
+                        '1979', '1980', '1981',
+                        '1982', '1983', '1984',
+                        '1985', '1986', '1987',
+                        '1988', '1989', '1990',
+                        '1991', '1992', '1993',
+                        '1994', '1995', '1996',
+                        '1997', '1998', '1999',
+                        '2000', '2001', '2002',
+                        '2003', '2004', '2005',
+                        '2006', '2007', '2008',
+                        '2009', '2010', '2011',
+                        '2012', '2013', '2014',
+                        '2015', '2016', '2017',
+                        '2018', '2019', '2020',
+                    ],
+                    'month': [
+                        '01', '02', '03',
+                        '04', '05', '06',
+                        '07', '08', '09',
+                        '10', '11', '12',
+                    ],
+                },
+                self.root_dir + dataset["path"])
+            
+            # extract the files
+            with zipfile.ZipFile(self.root_dir + dataset["path"], 'r') as zip_ref:
+                    zip_ref.extractall((self.root_dir + dataset["path"]).split("raw")[0] + "raw")
+          
         def fe_mb_mo(dataset):
             """
             Fetch Mapbiomas Mosaics to Google cloud.

@@ -37,7 +37,7 @@ def worker(payload):
     # load extraction masks
     polygons_raster = pickle.load(open(f"/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/drainage/temp_extraction_masks/{payload[0]}.pkl", "rb"))
 
-     # extract raw pixel values
+    # extract raw pixel values
     c_extracted = {i: payload[2][:,polygons_raster[i].astype(bool).todense()] for i in range(len(polygons_raster))}
     
     out_df = pd.DataFrame()  
@@ -71,7 +71,7 @@ def worker(payload):
         # set index
         out_df = pd.concat([out_df, merged_df.reset_index().set_index(["grid_id", "index"])])
     
-    out_df.to_feather(f"/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/land_cover/temp_extracted_land_cover/{payload[0]}.feather")
+    out_df.to_parquet(f"/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/land_cover/temp_extracted_land_cover/{payload[0]}.parquet")
 
 def main():
     # import drainage polygons
@@ -107,7 +107,7 @@ def main():
             data_queue.put(data)
             #load_semaphore.release()
 
-    def consumer_task(data_queue, load_semaphore, result_queue):
+    def consumer_task(data_queue, load_semaphore):
         while True:
             data = data_queue.get()
             if data is None:
