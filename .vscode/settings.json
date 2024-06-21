@@ -46,5 +46,10 @@
         "cinttypes": "cpp",
         "typeinfo": "cpp"
     },
-    "editor.acceptSuggestionOnEnter": "on"
+    "quarto.path": "/usr/local/bin/quarto",
+    "editor.acceptSuggestionOnEnter": "on",
+    "terminal.integrated.env.osx": {
+        "R_HOME": "/Users/felixschulz/miniforge3/lib/R"
+      },
+    "r.rpath.osx": "/Users/felixschulz/miniforge3/bin/R"
 }

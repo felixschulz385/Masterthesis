@@ -7,7 +7,7 @@ format:
     toc: false
     number-sections: true
     link-citations: true
-bibliography: "./Environmental Economics Project.bib"
+bibliography: "./Master Thesis.bib"
 ---
 
 # Introduction
@@ -59,11 +59,21 @@ I seek to add to this literature on a larger scale by observing health outcomes 
 
 # Data
 
-# Methodology
+# Sensor-measured pollution and deforestation
+
+Regressing the deforestation rate on various sensor-measured indicators, I directly estimate the correlation between deforestation and river pollution. I set up a panel regression model with station- and year-fixed effects and two-way clustered standard errors. 
+
+ and outcome variable, In @fig-stations_deforestation_Ofe_Ycl I present the results of this analysis. I find that increased deforestation is associated with increased readings on all outcome variables. As one would expect, all estimated coefficients are decreasing in distance to the deforestation. However only 
+
+There is a range of possible factors impacting river pollution outside of deforestation-related mechanisms. To alleviate the concern that my estimates are driven by other trends in deforestation over time I estimate two-way fixed effects models and include results in Figure . This approach yields equivalent results, albeit lacking the statistical power given the limited intra-annual variation in the variables. I also dis
 
 @assuncaoDETERingDeforestationAmazon2023 show that enforcement of conservation laws is driven by satellite imagery. If high levels of cloud cover at a given forest site regularly prohibit remote sensing, this may impact deforestation but is potentially exogenous to any public health outcomes downstream.
 
 # Empirical Results
+
+{{< include /tables/reg_stations_deforestation_agg_2005.tex >}}
+
+![](/figures/stations_deforestation_g5_share_Yfe_Ycl.png){#fig-stations_deforestation_Ofe_Ycl}
 
 # Conclusions
 

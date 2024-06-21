@@ -1,23 +1,36 @@
+# Data
 *.tif
 *.feather
-*.log
-*.out
 *.pkl
 *.geojson
-*.sqsh
 *.TIF
-*.pdf
+
+# Compressed files
 *.tar
 *.zip
+*.sqsh
+
+# Temporary Files
+*.log
+*.out
 *.pyc
+
+# Output files
+*.pdf
 *.html
+*.bib
+*.tex
+*.png
+
+# System Files
 .DS_Store
+.DS_Store?
+
 data/*/**
 aux/
 output/documents/*/*/**
 output/presentations/update/images/**
 output/presentations/update/update_files/**
-.DS_Store
 data/*/**
 api_creds
 setup/miniforge3/*
