@@ -46,5 +46,8 @@
         "cinttypes": "cpp",
         "typeinfo": "cpp"
     },
-    "editor.acceptSuggestionOnEnter": "on"
+    /*"terminal.integrated.env.osx": {
+        "R_HOME": "/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/setup/miniforge3/envs/thesis/lib/R"
+      },
+    "editor.acceptSuggestionOnEnter": "on"*/
 }

@@ -44,7 +44,8 @@ def main():
     )
 
     # Explode the DataFrame to ensure each year-cloud cover pair is in its own row and save to a feather file
-    tmp.explode(["cloud_cover", "year"]).to_feather("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/cloud_cover/extracted_cloud_cover.feather")
+    tmp = tmp.explode(["cloud_cover", "year"]).reset_index(names=["grid_id", "index"])
+    tmp.to_parquet("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/cloud_cover/cloud_cover.parquet")
     
 if __name__ == "__main__":
     main()
