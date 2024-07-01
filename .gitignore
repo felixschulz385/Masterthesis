@@ -21,6 +21,7 @@
 *.bib
 *.tex
 *.png
+*.rds
 
 # System Files
 .DS_Store

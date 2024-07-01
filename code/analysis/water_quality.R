@@ -232,6 +232,8 @@ analysis_results <- analysis_results %>%
 # hacky way of forcing stargazer to not obtain the formula from call
 analysis_results$model[[1]]$call <- NULL
 
+stargazer(analysis_results$model, type = "text")
+
 stargazer(analysis_results$model, type = "latex", out = "output/tables/reg_stations_land_use_2005.tex") #, dep.var.labels = analysis_results$dep_var
 
 
