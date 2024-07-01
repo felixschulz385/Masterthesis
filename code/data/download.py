@@ -3,6 +3,7 @@ import os
 import time
 from time import sleep
 import re
+import io
 import requests
 import tarfile
 import zipfile
@@ -22,8 +23,6 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.service import Service as ChromeService
-from webdriver_manager.chrome import ChromeDriverManager
 import cdsapi
 
 class DataAgent:
@@ -208,6 +207,133 @@ class download_agent:
                     stations_to_query.to_json(f"{self.root_dir}data/water_quality/queries.json")
             
             driver.close()
+            
+        def fe_he_mo():
+            """
+            Fetch (scrape) mortality data from the DATASUS TABNET website.
+            """   
+            options = webdriver.ChromeOptions()
+            options.add_argument('--ignore-ssl-errors=yes')
+            options.add_argument('--ignore-certificate-errors')
+            #options.add_argument('--headless')
+            options.add_argument("--disable-extensions") 
+            options.add_argument("--disable-gpu") 
+            
+            prefs = {}
+            prefs["profile.default_content_settings.popups"]=0
+            prefs["download.default_directory"]="/home/seluser/downloads"
+            options.add_experimental_option("prefs", prefs)
+            
+            def worker(mode):
+                # Connect to the WebDriver
+                driver = webdriver.Remote(command_executor='http://localhost:4444/wd/hub', options=options)
+                
+                # Years to query
+                if mode == "pre":
+                    years = list(range(79, 95))
+                elif mode == "post":
+                    years = list(range(96, 100)) + list(range(0, 22))
+                years = [str(x).zfill(2) for x in years]
+
+                # Dictionary to store the data
+                out_df = {year: None for year in years}
+                
+                try:
+                    for year in years:
+                        # Open the URL
+                        if mode == "pre":
+                            driver.get("http://tabnet.datasus.gov.br/cgi/deftohtm.exe?sim/cnv/obt09br.def")
+                        elif mode == "post":
+                            driver.get("http://tabnet.datasus.gov.br/cgi/deftohtm.exe?sim/cnv/obt10br.def")
+                        
+                        # Wait for the page to load
+                        time.sleep(3)  # Adjust the sleep time as needed
+                        
+                        # Select 'Faixa Etária' from the 'Coluna' dropdown
+                        driver.find_element(By.XPATH, "//select[@name='Coluna']/option[@value='Faixa_Etária']").click()
+                        
+                        # If the year is not "22", select the corresponding year option
+                        if year != "22" or year != "95":
+                            driver.find_element(By.XPATH, f"//option[@value='obtbr{year}.dbf']").click()
+                        
+                        # Select the 'prn' format
+                        driver.find_element(By.XPATH, "//input[@name='formato' and @value='prn']").click()
+                        
+                        # Click the submit button
+                        driver.find_element(By.XPATH, "//input[@class='mostra']").click()
+                        
+                        # Switch to the new window
+                        driver.switch_to.window(driver.window_handles[-1])
+                        
+                        # Wait for the data to be displayed
+                        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, "//pre")))
+                        
+                        # Extract the data from the 'pre' tag
+                        data = driver.find_element(By.XPATH, "//pre").text
+                        
+                        # Read the data as a CSV from the string and store it in the dictionary
+                        out_df[year] = pd.read_csv(io.StringIO(data), sep=';', encoding='latin1')
+                        
+                        # Close the current window
+                        driver.close()
+                        
+                        # Switch back to the original window
+                        driver.switch_to.window(driver.window_handles[0])
+                        
+                        # Optional: wait a bit before the next iteration
+                        time.sleep(2)  # Adjust the sleep time as needed
+                        
+                        # Click the reset button
+                        driver.find_element(By.XPATH, "//input[@class='limpa']").click()
+
+                finally:
+                    # Quit the WebDriver
+                    driver.quit()
+                    
+                ## Data Postprocessing
+
+                # Concatenate all dataframes in the dictionary into a single dataframe
+                out_df = pd.concat(out_df)
+
+                # Reset index and set 'year' as a column
+                out_df = out_df.reset_index(level=0, names=["year"])
+
+                # Adjust the 'year' column values (assuming years > 22 are in the 1900s and the rest are in the 2000s)
+                out_df["year"] = out_df.year.astype(int).apply(lambda x: x + 1900 if x > 22 else x + 2000)
+
+                # List of columns that need fixing (converting '-' to '0' and then to float)
+                fix_cols = [
+                    'Menor 1 ano', '1 a 4 anos', '5 a 9 anos',
+                    '10 a 14 anos', '15 a 19 anos', '20 a 29 anos', '30 a 39 anos',
+                    '40 a 49 anos', '50 a 59 anos', '60 a 69 anos', '70 a 79 anos',
+                    '80 anos e mais', 'Idade ignorada'
+                ]
+
+                # Replace '-' with '0' and convert columns to float32
+                out_df[fix_cols] = out_df[fix_cols].apply(lambda x: x.str.replace("-", "0"), axis=0).astype("float32")
+
+                # Extract municipality ID and name from the 'Município' column
+                out_df["mun_id"] = out_df.Município.str.extract(r"(\d{6})")[0].str.zfill(6)
+                out_df["mun_name"] = out_df.Município.str.extract(r"\d{6}(.*)")[0].str.strip()
+
+                # Drop the original 'Município' column as it's no longer needed
+                out_df.drop(columns=["Município"], inplace=True)
+
+                # Reorder columns to make 'mun_id', 'mun_name', and 'year' the first columns
+                out_df = out_df[["mun_id", "mun_name", "year"] + [col for col in out_df.columns if col not in ["mun_id", "mun_name", "year"]]]
+
+                # Rename columns to more parsable English names
+                out_df.columns = [
+                    'mun_id', 'mun_name', 'year', 'under_1', '1_to_4', '5_to_9', '10_to_14', '15_to_19',
+                    '20_to_29', '30_to_39', '40_to_49', '50_to_59', '60_to_69', '70_to_79',
+                    '80_and_more', 'age_unknown', 'total'
+                ]
+
+                # Drop rows with any missing values and save the cleaned dataframe to a CSV file
+                out_df.dropna().to_csv(f"/home/ubuntu/ext_drive/scraping/Masterthesis/data/mortality/scraping_{mode}_1996.csv", index=False)
+                
+            worker("pre")
+            worker("post")
         
         def fe_cc_co(dataset):
             """
