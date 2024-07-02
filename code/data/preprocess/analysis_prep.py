@@ -205,6 +205,9 @@ def aggregate_municipalities(root_dir = "/pfs/work7/workspace/scratch/tu_zxobe27
 
     # save to parquet
     out_df.to_parquet(f"{root_dir}data/land_cover/deforestation_municipalities_upstream.parquet")
+    
+def prepare_control_variables(root_dir = "/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/"):
+    
         
 if __name__ == "__main__":
-    aggregate_municipalities()
+    prepare_control_variables()
