@@ -528,3 +528,64 @@ ggsave("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/output/figures/sta
 
 
 felm(pH ~ forest | station + year | 0 | station + year, data = analysis %>% filter(bins == "[0.0,20000.0)")) %>% broom::tidy(.)
+
+
+---
+
+
+extract_results <- function(x, outcome = NULL) {
+    tmp <- x$model %>% map_df(~ .x %>% broom::tidy())
+    if (is.null(outcome)) {
+        return(tmp %>% select(coefficient = estimate, s_d = std.error, p_value = p.value))
+    } else {
+        return(tmp %>% filter(term == outcome) %>% select(coefficient = estimate, s_d = std.error, p_value = p.value))
+    }
+}
+
+plot_results <- function(x, limits = NULL, multiple_ind_var = NULL, facet_labels = NULL) {
+    if (is.null(limits)) {
+        limits <- levels(x$bins)
+    }
+    if (is.null(facet_labels)) {
+        labeller <- as_labeller(c(
+            pH = "pH",
+            turbidity = "Turbidity",
+            biochem_oxygen_demand = "Biochemical\nOxygen Demand",
+            dissolved_oxygen = "Dissolved Oxygen",
+            total_residue = "Total Residue",
+            total_nitrogen = "Total Nitrogen",
+            nitrates = "Nitrates"
+        ))
+    } else {
+        labeller <- as_labeller(facet_labels)
+    }
+    if (!is.null(multiple_ind_var)) {
+        ggplot(aes(x = bins, y = coefficient), data = x) +
+            geom_point() +
+            geom_errorbar(aes(ymin = coefficient - 1.96 * s_d, ymax = coefficient + 1.96 * s_d)) +
+            geom_hline(yintercept = 0, linetype = "dashed") +
+            ggh4x::facet_grid2(vars(dep_var), vars(ind_var), scales = "free_y", independent = "y") +
+            scale_x_discrete(
+                labels = str_extract_all(limits, "\\d+") %>% map_chr(~ paste0(as.double(.x[[1]]) / 1e3, "-", as.double(.x[[3]]) / 1e3, "km")),
+                limits = limits
+            ) +
+            theme_bw() +
+            theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+            labs(x = "Upstream Query Distance", y = "Coefficient")
+    } else {
+        return(
+            ggplot(aes(x = bins, y = coefficient), data = x) +
+                geom_point() +
+                geom_errorbar(aes(ymin = coefficient - 1.96 * s_d, ymax = coefficient + 1.96 * s_d)) +
+                geom_hline(yintercept = 0, linetype = "dashed") +
+                facet_grid(rows = vars(dep_var), scales = "free_y", labeller = labeller) +
+                scale_x_discrete(
+                    labels = str_extract_all(limits, "\\d+") %>% map_chr(~ paste0(as.double(.x[[1]]) / 1e3, "-", as.double(.x[[3]]) / 1e3, "km")),
+                    limits = limits
+                ) +
+                theme_bw() +
+                theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+                labs(x = "Upstream Query Distance", y = "Coefficient")
+        )
+    }
+}

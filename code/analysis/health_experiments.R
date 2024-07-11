@@ -1,165 +1,40 @@
-library(tidyverse)
-library(arrow)
-library(lfe)
-library(stargazer)
-
-# read data
-mortality <- arrow::read_parquet("/Users/felixschulz/Library/CloudStorage/OneDrive-Personal/Dokumente/Uni/Masterthesis/data/mortality/mortality_panel.parquet")
-
-# child mortality
-mortality <- mortality %>% 
-    drop_na(deaths, population) %>% 
-    filter(age_group %in% c("under_1", "1_to_4")) %>%
-    group_by(mun_id, year) %>%
-    summarise(mortality_rate = sum(deaths) / sum(population)) %>%
-    ungroup()
-
-# general mortality
-mortality <- mortality %>% 
-    drop_na(deaths, population) %>% 
-    group_by(mun_id, year) %>%
-    summarise(mortality_rate = sum(deaths) / sum(population)) %>%
-    ungroup()
-
-ggplot(mortality %>% filter(mun_id == 120001)) +
-    geom_line(aes(x = year, y = mortality_rate))
-
-land_cover <- arrow::read_parquet("/Users/felixschulz/Library/CloudStorage/OneDrive-Personal/Dokumente/Uni/Masterthesis/data/land_cover/deforestation_municipalities_upstream.parquet")
-land_cover <- land_cover %>% mutate(across(municipality, as.double))
-
-lm(I(deforestation / total) ~ I(cloud_cover / 100) * I(year > 2003), data = land_cover) %>% summary()
-
-analysis <- inner_join(mortality, land_cover, by = c("mun_id" = "municipality", "year")) %>% drop_na(deforestation)
-
-
-analysis <- analysis %>% 
-    group_by(mun_id) %>%
-    mutate(across(c(deforestation, total), cumsum),
-           across(c(cloud_cover), cummean),
-           forest_rate = forest / total,
-           deforestation_rate = deforestation / total) %>%
-    ungroup() %>%
-    filter(mortality_rate != Inf) %>%
-    drop_na(deforestation_rate, mortality_rate)
-
-# panel details
-analysis
-
-test <- analysis %>% filter(year >= 2003)
-lm(deforestation_rate ~ I(cloud_cover / 100), data = test) %>% summary()
-lm(forest_rate ~ I(cloud_cover / 100), data = test) %>% summary()
-
-felm(mortality_rate ~ 1 | mun_id + year | (deforestation_rate ~ cloud_cover) | mun_id + year, data = test) %>% summary()
-
-
-
 ###
 #
 ###
 
-deforestation <- arrow::read_parquet("/Users/felixschulz/Library/CloudStorage/OneDrive-Personal/Dokumente/Uni/Masterthesis/data/land_cover/deforestation_municipalities.parquet")
-
-deforestation <- deforestation %>% 
-    arrange(municipality, year) %>%
-    group_by(municipality) %>%
-    mutate(cloud_cover_ll_1 = lag(cloud_cover, 1),
-           cloud_cover_ll_2 = lag(cloud_cover, 2)) %>%
-    ungroup()
-
-test <- deforestation %>% filter(year >= 2003)
-
-felm(I(deforestation / total) ~ cloud_cover + cloud_cover_ll_1 + cloud_cover_ll_2 | municipality + year | 0 | municipality + year, data = test) %>% summary()
-
 
 ###
-#
+# Test
 ###
 
-setwd("/Users/felixschulz/Library/CloudStorage/OneDrive-Personal/Dokumente/Uni/Masterthesis")
+analysis %>% filter(is.na(mortality_rate)) %>% print(n = 100)
 
-library(tidyverse)
-library(splm)
-library(plm)
-library(spdep)
+full_join(mortality, deforestation, by = c("CC_2r", "year")) %>%
+    filter(year %in% 2005:2020) %>% filter(CC_2r == "110050")
 
-# read data
-mortality <- arrow::read_parquet("/Users/felixschulz/Library/CloudStorage/OneDrive-Personal/Dokumente/Uni/Masterthesis/data/mortality/mortality_panel.parquet")
+analysis %>%
+    select(-clean_water_share, -urban_share) %>%
+    filter(year %in% 2005:2020, CC_2r %in% legal_amazon) %>%
+    filter(if_any(everything(), ~ is.na(.)))
 
-# child mortality
-mortality <- mortality %>% 
-    drop_na(deaths, population) %>% 
-    filter(age_group %in% c("under_1", "1_to_4")) %>%
-    group_by(mun_id, year) %>%
-    summarise(mortality_rate = sum(deaths) / sum(population)) %>%
-    ungroup() %>%
-    mutate(municipality = as.character(mun_id))
+analysis_subset %>%
+    filter(CC_2r == "110003") %>% print(n = 100)
 
+ggplot() +
+    #geom_sf(data = municipalities) +
+    geom_sf(data = municipalities %>% mutate(CC_2r = CC_2 %>% as.character() %>% str_sub(1, 6)) %>% filter(CC_2r %in% test_muns), fill = "red")
 
-deforestation <- arrow::read_parquet("/Users/felixschulz/Library/CloudStorage/OneDrive-Personal/Dokumente/Uni/Masterthesis/data/land_cover/deforestation_municipalities.parquet")
+municipalities %>%
+    mutate(CC_2r = CC_2 %>% as.character() %>% str_sub(1, 6)) %>%
+    filter(CC_2r %in% odd_muns) %>%
+    ggplot() +
+    geom_sf()
 
-deforestation <- deforestation %>% 
-    arrange(municipality, year) %>%
-    group_by(municipality) %>%
-    mutate(cloud_cover_ll_1 = lag(cloud_cover, 1),
-           cloud_cover_ll_2 = lag(cloud_cover, 2)) %>%
-    ungroup()
+###
+# Prepare spatial weights
+###
 
-analysis <- inner_join(mortality, deforestation, by = c("municipality", "year")) %>% drop_na(deforestation)
-
-analysis <- analysis %>% 
-    group_by(mun_id) %>%
-    mutate(across(c(deforestation, total), cumsum),
-           across(c(cloud_cover), cummean),
-           forest_rate = forest / total,
-           deforestation_rate = deforestation / total) %>%
-    ungroup() %>%
-    filter(mortality_rate != Inf) %>%
-    drop_na(deforestation_rate, mortality_rate)
-
-# Count the number of observations for each municipality and year
-obs_count <- analysis %>%
-  group_by(municipality, year) %>%
-  summarise(count = n()) %>%
-  ungroup()
-
-# Check which municipalities have observations for each year
-year_count <- obs_count %>%
-  group_by(municipality) %>%
-  summarise(years_observed = n()) %>%
-  ungroup()
-
-# Identify the largest balanced sub-panel
-max_years <- max(year_count$years_observed)
-balanced_municipalities <- year_count %>%
-  filter(years_observed == max_years) %>%
-  pull(municipality)
-
-# Filter the data to include only the balanced sub-panel
-balanced_analysis <- analysis %>%
-  filter(municipality %in% balanced_municipalities)
-
-# Check the balance of the resulting data
-balanced_check <- balanced_analysis %>%
-  group_by(municipality, year) %>%
-  summarise(count = n()) %>%
-  ungroup() %>%
-  spread(key = year, value = count)
-
-# If any NA values exist, it means the panel is not balanced
-if(any(is.na(balanced_check))) {
-  print("The panel is not balanced")
-} else {
-  print("The panel is balanced")
-}
-
-
-subset_analysis <- balanced_analysis %>% 
-    #filter(mun_id %in% c(110001, 110002)) %>%
-    select(mun_id, year, deforestation_rate, mortality_rate, cloud_cover_ll_1)
-
-lfe::felm(deforestation_rate ~ cloud_cover | mun_id + year, data = balanced_analysis %>% filter(year >= 2003)) %>% summary()
-
-data_municipalities <- as.double(unique(subset_analysis$mun_id))
+data_municipalities <- as.double(unique(analysis_subset$CC_2r))
 
 weights_municipalities <- read_csv("/Users/felixschulz/Library/CloudStorage/OneDrive-Personal/Dokumente/Uni/Masterthesis/data/river_network/weights_municipalities.csv")
 weights_municipalities <- weights_municipalities %>% 
@@ -176,12 +51,12 @@ prepare_weights <- function(method, max_distance, weights_municipalities){
     # Identify disconnected units
     disconnected_units <- which(rowSums(weights) == 0)
 
-    # introduce small back-weights at river network end nodes
+    # Introduce small back-weights at river network end nodes
     to_remove <- c()
     for(i in disconnected_units){
         if(!colSums(weights)[i] == 0) {
             for(j in which(weights[, i] > 0)){
-                weights[i,j] <- .1
+                weights[i,j] <- .01
             }
         } else {
             to_remove <- c(to_remove, i)
@@ -274,18 +149,20 @@ two_way_cluster_hc1_vcov <- function(X, residuals, cluster_id, cluster_time) {
   return(vcov)
 }
 
-estimate_models <- function(subset_analysis, weights_filtered, weights_matrix_filtered){
-    subset_pdata_filtered <- pdata.frame(subset_analysis %>% filter(mun_id %in% rownames(weights_matrix_filtered)) %>% arrange(mun_id, year), index = c("mun_id", "year"))
+estimate_models <- function(data, weights_filtered, weights_matrix_filtered){
+    subset_pdata_filtered <- pdata.frame(data %>% filter(CC_2r %in% rownames(weights_matrix_filtered)) %>% arrange(CC_2r, year), index = c("CC_2r", "year"))
 
+    formula <- deforestation_rate ~ cloud_cover + gdp_pc + educ_ideb + vaccination_index_5y
     # First stage: Regress the endogenous variable on the instruments and other exogenous variables
-    iv_model <- plm(deforestation_rate ~ cloud_cover_ll_1, data = subset_pdata_filtered, model = "within", effect = "twoways")
+    iv_model <- plm(formula, data = subset_pdata_filtered, model = "within", effect = "twoways")
 
     # Get the fitted values (instrumented values for x1)
     subset_pdata_filtered$x1_hat <- fitted(iv_model)
 
     # Second stage: Estimate the SDM with the instrumented variable
     # Create the formula with the spatial lag of the dependent variable and independent variables
-    formula <- mortality_rate ~ x1_hat
+    #gdp_pc + clean_water_share + educ_ideb + vaccination_index_5y + urban_share
+    formula <- mortality_rate ~ x1_hat + gdp_pc + educ_ideb + vaccination_index_5y
 
     # Estimate the SDM with two-way fixed effects
     sdm_model <- spml(formula, data = subset_pdata_filtered, listw = weights_filtered, model = "within", effect = "twoways", spatial.error = "none", lag = TRUE)
@@ -297,7 +174,7 @@ estimate_models <- function(subset_analysis, weights_filtered, weights_matrix_fi
     k <- ncol(X)
 
     # Define the clustering variables
-    cluster_id <- as.numeric(subset_pdata_filtered$mun_id)
+    cluster_id <- as.numeric(subset_pdata_filtered$CC_2r)
     cluster_time <- as.numeric(subset_pdata_filtered$year)
 
     # Calculate the two-way cluster-robust variance-covariance matrix
@@ -308,6 +185,11 @@ estimate_models <- function(subset_analysis, weights_filtered, weights_matrix_fi
 
     return(list(iv_model = iv_model, sdm_model = sdm_model, robust_se = robust_se))
 }
+
+tmp <- prepare_weights("linear", 1000, weights_municipalities)
+weights_filtered <- tmp$weights_filtered; weights_matrix_filtered <- tmp$weights_matrix_filtered
+results <- estimate_models(analysis_subset, weights_filtered, weights_matrix_filtered)
+
 
 for (max_distance in c(100, 500, 1000)){
     for (method in c("linear", "exponential")){
@@ -321,15 +203,17 @@ for (max_distance in c(100, 500, 1000)){
 
 
 results <- readRDS("output/models/spml_deforestationTotal_noControl_linear_100.rds")
+
+results$"iv_model" %>% summary()
+
 results$"sdm_model" %>% summary()
 
 # Get the robust standard errors
 robust_se <- sqrt(diag(vcov_two_way))
 
 # Summarize the results with robust standard errors
-coef <- coefficients(sdm_model)
-summary <- data.frame(Estimate = coef, `Robust SE` = robust_se, `t value` = coef / robust_se, `p` = 2 * pt(-abs(coef / robust_se), df = n - k))
-
+coef <- coefficients(results$sdm_model)
+summary <- data.frame(Estimate = coef, `Robust SE` = results$robust_se, `t value` = coef / results$robust_se, `p` = 2 * pt(-abs(coef / results$robust_se), df = n - k))
 print(summary)
 
 ###

@@ -4,11 +4,24 @@ subtitle: "Economics of Sustainability and the Environment"
 author: "Felix Schulz"
 format:
   pdf:
+    keep-tex: true
     toc: false
     number-sections: true
     link-citations: true
+    include-in-header:  
+      - text: |
+          \usepackage{graphicx}
+          \usepackage{amsfonts}
+          \usepackage{amsmath}
+          \usepackage{pifont}
+          \usepackage{booktabs}
+          \usepackage{dcolumn}
+          \usepackage{makecell}
+          \usepackage{threeparttable}
 bibliography: "./Master Thesis.bib"
 ---
+
+
 
 # Introduction
 
@@ -33,47 +46,142 @@ Many economic models have been developed to weigh these benefits and external co
 
 Extended models then acknowledge the fact that deforestation is associated with social costs that are not internal to the parties with property rights to the forest [@balboniAppendixEconomicsTropical2023]. By modeling this cost as a fixed shift to the private marginal cost, the socially optimal equilibrium lies below the market-achieved private rate. This underlines the necessity to internalize these costs through policy. Economic theory yields several instruments to achieve this goal. Pigouvian taxes on logging or subsidies for landowner to *not* remove a forest are among the popular [@NBERw31410]. I discuss several such attempts in @sec-policy. It does however remain essential to know the extent of the social costs of deforestation for any such policy to work. My proposed paper therefore has important policy implications by shedding a light on the superlocal health cost of logging across Brazil.
 
-## Policy Instruments on Deforestation {#sec-policy}
-
-From an ecological point of view, @malhiClimateChangeDeforestation2008 outline their much-cited recommendation on policy agendas managing deforestation in the Amazon: To avoid reaching catastrophic tipping points, a gross maximum deforestation rate of 30%-40% with limited fragmentation should be targeted. They suggest migration corridors, river conservation and the protection of a core rainforest to the end of preserving biodiversity. Finally, education initiatives should target a reduction in wildfires.
-
-Historically, government development policy in Brazil has been a major driver of deforestation, enabling access through large-scale infrastructure projects and subsidies on lifestock and mining endeavors [@maharGovernmentPoliciesDeforestation1989]. Since 1965, the Forest Code regulates land use in the Amazon [@soares-filhoCrackingBrazilForest2014]. While changes in the 1990s have increased its focus on conservation, conflicting interest of the agricultural sector have limited its requirements and kept compliance low. 
-
-Brazil has since made extensive pledges to reduce deforestation-related emissions and implements a range of policy and monitoring instruments to ensure attainment [@tacconiLawEnforcementDeforestation2019]. The Detection of Deforestation in Real Time (DETER) system and Action Plan for the Prevention and Control of Deforestation in the Legal Amazon (PPCDAm) of 2004 have been shown to have significantly reduced deforestation through monitoring and enforcement efforts [@nepstadSlowingAmazonDeforestation2014; @internationalpartnershiponmitigationandmrvImplementingPreventionControl2018]. 
-
-Since its inception in 2008, the Amazon Fund is important cornerstone policy in Brazil's strategy against deforestation [@correaAmazonFund102019]. It is at its core an implementation of the principles of the Reducing Emissions from Deforestation and Forest Degradation (REDD+) framework. International donations are used to fund conservation projects in monitoring existing regulation, maintaining protected areas, supporting sustainable production and investments in innovations. The central idea is to make payments conditional on environmental efforts and thereby subsidize abatement for those who would not have been able to afford it void the transfers [@NBERw31410]. The effectiveness and efficiency of this command-and-control approach is however disputed [@correaAmazonFund102019]. *Bolsa Verde*, another example of a REDD+ program, paying poor landowners in the Amazon to maintain forest cover is considered to be cost effective [@RePEc:cgs:wpaper:110].
-
 ## Health Externalities of Deforestation {#sec-health_effects}
 
 The body of research on impacts of deforestation on human health is manifold. There exists convincing evidence that fires used to clear forests lead to increased air pollution and levels of mortality due to pulmonary diseases [@reddingtonAirQualityHuman2015]. While the latter form of pollution may have lingering effects on health, this mechanism of impact of inherently tied to the moment of first clearing a forest. Other studies focus on latent forms of damage arising from the altered landscape after deforestation. It turns out that several species of mosquito connected to spreading Malaria thrive in the cleared areas with more open land and artificial water infrastructure [for example see @olsonDeforestationMalariaMancio2010]. There is however significant debate if this is in fact the driving mechanisms for some of the observed correlations. Increased human exposure to mosquito habitat, increased immunity and biased data on health outcomes may serve as alternative explanations [@tuckerlimaDoesDeforestationPromote2017]. 
 
 Research has revealed how soil after deforestation features significantly altered biological properties, reducing its ability to retain nutrient storage essential for agriculture and deteriorating its function as greenhouse gas storage [@veldkampDeforestationReforestationImpacts2020]. Important for the context of this study, reduced erosion resistance is another key finding of many studies [for example see @molinaComplexLandCover2012; @zhengEffectsErosionPatterns2005; and @restrepoa.ImpactoDeforestacionErosion2015]. @veldkampDeforestationReforestationImpacts2020 review how the change in soil properties resulting from deforestation and alternative use decrease the ability of soil to allow vertical water flow, increasing the likelihood of erosion through overland flow. This effect is mediated by the type of soil, the slope of the landscape and the kind of replacing alternative use [@pimentelEnvironmentalEconomicCosts1995]. Ecological accounts of the impact of this process range from negligible [@neillWatershedResponsesAmazon2013] to devastating [@giertzAssessingEffectsLand2005]. @hohnerWildfiresAlterForest2019 describe how wildfires used for deforestation may further amplify erosion. 
 
-This now allows me to sketch a clear story of the mechanism I want to survey following the framework of *contamination*, *exposure* and *dose-response* [for example see @graffzivinEnvironmentHealthHuman2013]. Deforestation (the independent variable of the study) impacts soil erosion, leading to river pollution (*contamination*), then drinking water pollution (*exposure*) and finally negative health outcomes (*dose-response*). Future statistical analysis may include the discussed mediating factors as controls or interaction terms. This model also allows me to potentially estimate a range of models for every stage of the framework if data is available.
+This now allows me to sketch a clear story of the mechanism I want to survey following the framework of *contamination*, *exposure* and *dose-response* [for example see @graffzivinEnvironmentHealthHuman2013]. Deforestation (the independent variable of the study) impacts soil erosion, leading to river pollution (*contamination*). This water may then be used by the local population (*exposure*), leading to negative health outcomes (*dose-response*). Future statistical analysis may include the discussed mediating factors as controls or interaction terms. This model also allows me to potentially estimate a range of models for every stage of the framework if data is available.
 
 While most research focuses on the on-site productivity losses caused by soil degradation, there is existing evidence on how increased erosion impacts sediment runoff and water pollution off-site. @maHumanHealthRisk2014 describe how deforestation increased toxic contamination in a Chinese region subject to deforestation-induced erosion but only indirectly estimate impacts on health outcomes. Most economic estimations of the externalities are tied to estimating defensive expenditures in water pollution. As early as 1988, @holmesOffsiteImpactSoil1988 finds that this increase in erosion leads to increased defensive water treatment cost. In a more recent study @vincentValuingWaterPurification2016 estimate that forest cover decreases water treatment expenditure in Malaysia.
 
 Extending the context to a more wholistic view on social costs in general, in addition to the health outcomes outlined above, the social costs of soil erosion include dam silation and flooding. @clarkErodingSoilsOfffarm1985 calculated the social cost of offsite erosion at USD 3 billion to USD 13 billion in 1980 and the United States alone. @pataultAnalysisOffsiteEconomic2021 estimate the offsite cost of erosion for two sites in Northern France and find costs in the range of EUR 1,000 to EUR 4,300 per year and kilometer squared. 
 
-I seek to add to this literature on a larger scale by observing health outcomes and deforestation alongside its mediating factors using remote-sensing data.
+## Policy Instruments on Deforestation {#sec-policy}
+
+From an ecological point of view, @malhiClimateChangeDeforestation2008 outline their much-cited recommendation on policy agendas managing deforestation in the Amazon: To avoid reaching catastrophic tipping points, a gross maximum deforestation rate of 30%-40% with limited fragmentation should be targeted. They suggest migration corridors, river conservation and the protection of a core rainforest to the end of preserving biodiversity. Finally, education initiatives should target a reduction in wildfires.
+
+Historically, government development policy in Brazil has been a major driver of deforestation, enabling access through large-scale infrastructure projects and subsidies on lifestock and mining endeavors [@maharGovernmentPoliciesDeforestation1989]. Since 1965, the Forest Code regulates land use in the Amazon [@soares-filhoCrackingBrazilForest2014]. While changes in the 1990s have increased its focus on conservation, conflicting interest of the agricultural sector have limited its requirements and kept compliance low. 
+
+Brazil has since made extensive pledges to reduce deforestation-related emissions and implements a range of policy and monitoring instruments to ensure attainment [@tacconiLawEnforcementDeforestation2019]. Since its inception in 2008, the Amazon Fund is important cornerstone policy in Brazil's strategy against deforestation [@correaAmazonFund102019]. It is at its core an implementation of the principles of the Reducing Emissions from Deforestation and Forest Degradation (REDD+) framework. International donations are used to fund conservation projects in monitoring existing regulation, maintaining protected areas, supporting sustainable production and investments in innovations. The central idea is to make payments conditional on environmental efforts and thereby subsidize abatement for those who would not have been able to afford it void the transfers [@NBERw31410]. The effectiveness and efficiency of this command-and-control approach is however disputed [@correaAmazonFund102019]. *Bolsa Verde*, another example of a REDD+ program, paying poor landowners in the Amazon to maintain forest cover is considered to be cost effective [@RePEc:cgs:wpaper:110].
+
+The Detection of Deforestation in Real Time (DETER) system and Action Plan for the Prevention and Control of Deforestation in the Legal Amazon (PPCDAm) of 2004 have been shown to have significantly reduced deforestation through monitoring and enforcement efforts [@nepstadSlowingAmazonDeforestation2014; @internationalpartnershiponmitigationandmrvImplementingPreventionControl2018]. The DETER system provides the central identification strategy of my analysis: When anti-deforestation efforts are dependent on the ability to observe land cover changes with satellites, cloud coverage prohibits effective response.
+
+# Methodology
+
+This thesis is approaches the issue of deforestation, river pollution and health outcomes in 2 stages. First, using water quality sensor data, I estimate if deforestation impacts water quality. Using the insights from this analysis, I then attempt to estimate the impact of deforestation on a range of health outcomes using an IV strategy. In this section I outline my model details and identification strategies.
+
+## Sensor-measured river pollution
+
+As discussed above, biochemical, theoretical research suggests that deforestation may facilitate ground erosion. Rainfall may then cause pollutants to be drained into the river system, resulting in pollution. Using a large, unbalanced panel of sensor data, I estimate the correlation between river pollution and deforestation. For each sensor, I identify all upstream rivers and calculate distances from each river segment to the sensor. I estimate panel regression models with sensor- and year-fixed effects:
+$$
+\text{Pollution}_{it} = \alpha + \beta \cdot \text{Deforestation}_{it} + \gamma_i + \delta_t + \epsilon_{it}
+$$
+
+where $\text{Pollution}_{it}$ is the pollution level measured by sensor $i$ in year $t$, $\text{Deforestation}_{it}$ is the measure of deforestation upstream of sensor $i$ in year $t$, $\gamma_i$ represents the sensor-fixed effects, accounting for time-invariant characteristics of each sensor, $\delta_t$ represents the year-fixed effects, accounting for shocks common to all sensors in a given year, and $\epsilon_{it}$ is the error term, which is clustered at the estuary and year level to adjust for within-estuary and -year correlation.
+
+The detail of my data allows me to also investigate how different forms of alternative land use impact river pollution. I estimate an analogous model to the above, regressing sensor measurements on four superclasses of land cover replacement: pasture, agriculture, urban environments and mining. Finally, I investigate how distance interacts with the estimated effects. To this end, I aggregate the data into consecutive distance bins of 50km from the sensor and run a panel fixed effects regression with the following model:
+
+$$
+\text{Pollution}_{itj} = \alpha + \beta \cdot \text{Deforestation}_{itj} + \theta \cdot (\text{Deforestation}_{itj} \cdot \text{Distance}_{itj}) + \gamma_i + \delta_t + \epsilon_{it}
+$$
+
+## Health Outcomes
+
+Given the above mechanisms of pollution, if the contaminated water comes into contact with the local population, negative health outcomes are to be expected. Using municipality-level mortality rates, data on hospitalizations and -spending, I attempt to estimate the relationship between deforestation and health. To this end, I regress the respective health indicator on both spatially and temporally cumulative upstream deforestation. The temporal cumulativeness results in an interpretation of the data as *deforestation since 1985*, the first year on record. Spatial cumulation is performed using a spatial weighting matrix closer described in @sec-appendix-hydro. Deforestation in my model is the weighted mean of deforestation in all upstream municipalities with weights decreasing in distance. I include municipality and annual fixed effects and report two-way clustered standard errors.
+
+A key issue in this analysis is the potential endogeneity between deforestation and health outcomes. Endogeneity can arise if there are omitted variables that simultaneously affect both deforestation and health, leading to biased estimates. For example, economic development might influence both the rate of deforestation and healthcare quality, creating a spurious correlation. Additionally, reverse causality could be a concern if poorer health outcomes drive changes in land use, such as increased deforestation to make way for agricultural expansion aimed at improving local food security.
+
+To address these endogeneity concerns, I utilize an instrumental variable (IV) approach. An appropriate instrument is one that is correlated with deforestation but uncorrelated with the error term in the health outcome equation. Since mid-2004 the Detection of Deforestation in Real Time (DETER) system monitors land use changes in the legal Amazon. Satellite imagery is used in an automated system to inform the authorities of deforestation events. Until 2017, daily, 250m-resolution imagery of the Moderate-resolution Imaging Spectroradiometer (MODIS) was used for this analysis. This allowed for the detection of deforestation of areas larger than 25 hectares [@dinizDETERBNewAmazon2015]. Crucially, satellite-based surveillance is impossible if lasting cloud coverage prohibits the view from the sky. 
+
+This gives rise to my identification strategy: Following an approach similar to @assuncaoDETERingDeforestationAmazon2023, I use data on cloud cover as an instrument for deforestation. The central rationale behind this approach is that high levels of cloud cover at a given forest site prohibit remote sensing and thereby also effective enforcement of anti-deforestation regulation. This may impact deforestation but is likely exogenous to public health outcomes downstream. The validity of this IV approach hinges on the instrument satisfying both relevance and exogeneity conditions. I test the relevance by checking the strength of the correlation between the instrument and deforestation, reporting first-stage F-tests for all model specifications. 
+
+Exogeneity requires the instrument to neither directly nor indirectly influence health outcomes through any other variable than deforestation. The most obvious concern is that increased cloud coverage comes in hand with weather conditions that have effects on public health. For example, increased rainfall may lead to a rise in waterborne diseases or vector-borne diseases like malaria and dengue fever, which are sensitive to changes in precipitation. The cumulative nature of my outcome variable helps alleviate this concern. Since the independent variable of interest is upstream deforestation, I aggregate deforestation in an area of up to 1000 kilometers in river length. The larger the distance, the less likely weather is going to impact health outcomes at a given municipality. Nevertheless, I do include weather controls, namely average precipitation and temperature in my models.
+
+In @sec-cloud_cover-deforestation I estimate a difference-in-difference-in-differences (DDD) regression of deforestation on cloud cover that also serves as a placebo test to the main specification in this section. Finally, another concern is that cloud coverage may be reversely causated by deforestation. Over the past few decades, numerical simulations predict a decrease in cloud cover in some parts of the Amazon, particularly in regions experiencing extensive deforestation [@royMesoscaleVegetationAtmosphere2009]. This analysis is based on the theoretical finding that deforestation disrupts local hydrological cycles, reducing evapotranspiration and subsequent cloud formation [@lejeuneInfluenceAmazonianDeforestation2015]. On the contrary, empirical evidence from the Brazilian rainforest contradicts this, showing that deforestation is associated with increases in forest cover [@royMesoscaleVegetationAtmosphere2009, @xuContrastingImpactsForests2022]. In any case, there appears to be a theoretical and empirical link between cloud cover and deforestation. I am not able to rule out this reverse causality between the instrument and the endogenous regressor. In comparison to @assuncaoDETERingDeforestationAmazon2023, this is a more elevated issue in my work because I use cloud cover to directly instrument deforestation opposed to law enforcement activity. Any further findings should therefore be read keeping this in mind.
+
+My main analysis then follows the following model structure. I attempt to estimate the causal relationship between deforestation and health outcomes with a two-stage least squares (TSLS) approach. In the first stage I regress the potentially endogenous regressor deforestation on the instrument, cloud coverage, and any control variables. Any variation in deforestation remaining after recovering the fitted values from this model should then be exogenous i.r.t. the main relationship in my model. The first stage formula is given by the equation:
+
+$$ 
+\text{Deforestation}_{it} = \alpha_0 + \alpha_1 \text{CloudCoverage}_{it} + \mathbf{X}_{it}\mathbf{\beta} + \lambda_i + \gamma_t + \epsilon_{it}
+$$
+
+where $\text{Deforestation}_{it}$ is the deforestation in municipality $i$ at time $t$, $\text{CloudCoverage}_{it}$ is the instrument for deforestation, $\mathbf{X}_{it}$ is a vector of control variables, $\lambda_i$ represents the municipality fixed effects, $\gamma_t$ represents the time fixed effects, and $\epsilon_{it}$ is the error term.
+
+In the second stage, I then use the fitted values of deforestation from the first stage as an instrument in the following regression:
+
+$$ 
+\text{HealthOutcome}_{it} = \beta_0 + \beta_1 \widehat{\text{Deforestation}}_{it} + \mathbf{X}_{it}\mathbf{\delta} + \lambda_i + \gamma_t + \nu_{it}
+$$
+
+where $\text{HealthOutcome}_{it}$ represents the health indicators such as mortality rates, hospitalizations, or healthcare spending in municipality $i$ at time $t$, $\widehat{\text{Deforestation}}_{it}$ are the predicted values of deforestation obtained from the first stage, $\mathbf{X}_{it}$ includes the control variables, $\lambda_i$ and $\gamma_t$ are the fixed effects, and $\nu_{it}$ is the error term.
+
+To ensure robust inference in the presence of potential correlation in the error terms across both municipalities and years, I utilize the two-way clustered standard error correction method proposed by @cameronRobustInferenceMultiway2011 as implemented by @gaure2013lfe. This method adjusts standard errors to account for clustering along both dimensions. To be specific and following the idea of @assuncaoDETERingDeforestationAmazon2023, I choose to calculate cluster-robust standard errors robust to unobserved variation within a municipality over time and between municipalities of a given immediate region in a year.^[Immediate regions (*Regiões geográficas Imediatas*) are an official assignment of all	5570 Brazilian municipalities into 510 groups. Municipalities within a group border each other and are likely to experience the same shocks i.r.t. health outcomes.] This is crucial given the potential for spatial spillovers and temporal autocorrelation in environmental and health data. For example, unobserved shocks affecting health outcomes could be correlated within a municipality over time or across municipalities in a region due to local policies or environmental factors. By employing this correction, I mitigate the risk of underestimating the true variability of the estimated coefficients, which would otherwise lead to overly optimistic inference (i.e., lower p-values and narrower confidence intervals). 
 
 # Data
 
-# Sensor-measured pollution and deforestation
+For my research I source and combine a selection of public data from the realms of environmental science, health and economics. For replication of data generation, please see section @sec-appendix-data.
 
-Regressing the deforestation rate on various sensor-measured indicators, I directly estimate the correlation between deforestation and river pollution. I set up a panel regression model with station- and year-fixed effects and two-way clustered standard errors. 
+## Deforestation data
 
- and outcome variable, In @fig-stations_deforestation_Ofe_Ycl I present the results of this analysis. I find that increased deforestation is associated with increased readings on all outcome variables. As one would expect, all estimated coefficients are decreasing in distance to the deforestation. However only 
+In the field of land use classification there have been made several recent advancements allowing for detailed and thorough analyses of changes of land cover and their implications. For Brazil specifically, the MapBiomas project [@souzaReconstructingThreeDecades2020] provides detailed, annual land cover classification at 30m resolution. I obtain *Collection 8* rasters and aggregate the data by drainage polygon and year. To this end, I simplify the data's classification and re-group them into the categories of forest, pasture, agriculture, urban, and mining.^[See X for a correspondence table between MapBiomas and my classes.] Finally, I count deforestation events as pixel-wise changes between two subsequent years from forest to any other class.
 
-There is a range of possible factors impacting river pollution outside of deforestation-related mechanisms. To alleviate the concern that my estimates are driven by other trends in deforestation over time I estimate two-way fixed effects models and include results in Figure . This approach yields equivalent results, albeit lacking the statistical power given the limited intra-annual variation in the variables. I also dis
+## Health Indicators
 
-@assuncaoDETERingDeforestationAmazon2023 show that enforcement of conservation laws is driven by satellite imagery. If high levels of cloud cover at a given forest site regularly prohibit remote sensing, this may impact deforestation but is potentially exogenous to any public health outcomes downstream.
+In my analysis I observe health outcomes from two major data sources: I obtain death records from @ministeriodasaudedobrasilmsSistemaInformacoesMortalidade2022. Upon the passing of every Brazilian, medical professionals are required to fill out a standardized form that is collected by the responsible government agency. Each record states the age and home municipality of the diseased. Aggregating by municipality and combining it with birth and population estimates from @ministeriodasaudedobrasilmsNascidosVivosSINASC2023 and @institutobrasileirodegeografiaeestatisticaibgePopulacaoBrasileira2022 respectively allows me to calculate mortality rates. 
+
+In addition to that I use aggregated inpatient and spending data from @ministeriodasaudedobrasilmsSistemaInformacoesHospitalares2024 to observe spending and patient numbers. The *Sistema Único de Saúde* is the public provider of healthcare in Brazil that finances close to all medical services in the country. The resulting patient data is therefore highly representative of hospital loads and allows for an comprehensive account of healthcare costs.
+
+## Cloud Cover
+
+The DETER project [@dinizDETERBNewAmazon2015] publishes monthly cloud polygons in which they were not able to observe land cover changes. With some sporadic gaps, this data is mostly complete from mid-2005 until 2017. I rasterize and aggregate the data by municipality and year. To allow for analyses before 2005 and outside the project's boundaries (the legal Amazon), I also access CLARA-A3, a sensor-based long-term collection of cloud cover data by @copernicusclimatechangeserviceCloudPropertiesGlobal2022. It is important to note that the definition of cloud cover in both sources differs significantly. While CLARA report average monthly cloud cover in a given cell throughout the month, DETER reports areas in which they were not able to make any observations within the same time frame. Also, while both sensors provide great temporal detail of two or one daily observation respectively, the exact times of observation and spatial resolution (1.1km and 250m) differ between the two [@noaanationalcentersforenvironmentalinformationAdvancedVeryHigh1978, @nasaMODISSpecifications2024]. In @fig-stations I provide example images of cloud cover for both sources and show that the resulting municipal indicators are correlated.
+
+## River and drainage model
+
+In order to trace potential outcomes down the flow of rivers, I compute a detailed model of all rivers in Brazil. Based on @sistemanacionaldeinformacoessobrerecursoshidricossnirhBHO20175KTrecho2017 and using tools of network analysis, I identify 1025 sub-networks identified by their shared estuary into the ocean, 123,140 confluences between rivers, and 125,192 source points. For every river segment I calculate its distance for the estuary to the sea. For further processing I split rivers at municipality borders to make both bijectively relatable. This network model is then used to calculate upstream reachability information for every node, which I aggregate by municipality. In @ I provide an example of the detail of this data.
+
+My research design also requires me to link deforestation to rivers. Any sediments rivers would follow the flow of water through the terrain. Starting from drainage trenches, the flow of water accumulates until the stream can be considered a river. Surrounding any river there is therefore a watershed area which feeds into it. To model this, I split rivers into segments of 1km and then use the methodology of @bartos_2020 with the digital elevation model provided by @europeanspaceagencyCopernicus2022 to calculate exact drainage polygons around the river segments. This approach requires extensive data pre-processing and matching algorithms which I further elaborate on in @sec-appendix-hydro. These polygons are then used to extract deforestation as discussed above. In @ I present an example of the detailed results of this process.
+
+## Sensor data
+
+The Brazilian National Water Agency (ANA) collects standardized information on water quality in the @agencianacionaldeaguasanaPortalQualidadeAguas2024. I download all available historical data from the HidroWeb system of the National Water Resources Information System (SNIRH) and aggregate them by year, resulting in an unbalanced panel of 4,522 stations in 45,094 data points. In my analysis I focus on the variables of pH, turbidity, biochemical oxygen demand (BOD5.20), dissolved oxygen, total residue, total nitrogen, and nitrate concentration. Not all variables are measured at all times, please refer to @tbl-summary-sensor-data for summary statistics. A map of the spatial distribution of all stations is provided in @fig-stations.
+
+{{< include /tables/summary_sensor_data.tex >}}
+
+## Control variables
+
+To account for potential confounding factors, several control variables are included in the analysis. These controls are GDP per capita, average schooling grades, a vaccination index, primary care coverage, doctors per capita, urbanization and the availability of sewage systems. Data for GDP per capita are sourced from @institutobrasileirodegeografiaeestatisticaibgeProdutoInternoBruto1996. Average schooling grades in form of the IDEB index are sourced @institutonacionaldeestudosepesquisaseducacionaisinepIndiceDesenvolvimentoEducacao2005. The vaccination index, representing the coverage of essential immunizations, is derived from health department records @ministeriodasaudemsSistemaImunizacoes1994.^[I focus on the number of administered vaccinations against yellow fever, hepatitis A and B, polio, and Haemophilus influenzae type B. In the analysis I use a rolling 5-year average of annual vaccination rates of newborns.] I obtain the primary care coverage and the number of doctors per capita from @ministeriodasaudemsCoberturaAtencaoBasica2007. Finally, data on urbanization and sewage availability are obtained from municipal health and infrastructure reports @ministeriododesenvolvimentoregionalmdrSistemaNacionalInformacoes1995. 
 
 # Empirical Results
 
-{{< include /tables/reg_stations_deforestation_agg_2005.tex >}}
+## Sensor-measured river pollution
 
-![](/figures/stations_deforestation_g5_share_Yfe_Ycl.png){#fig-stations_deforestation_Ofe_Ycl}
+If deforestation was to expose populations to health outcomes along rivers, one should be able to estimate an impact on sensor-measured river pollution. Evidence from environmental science shows that soil erosion increases turbidity by introducing sediments into water bodies, reducing light penetration and affecting aquatic life [@unitedstatesenvironmentalprotectionagencyepaTurbidityParameterFactsheet2021]. Eroded soils carry organic matter and nutrients, raising biochemical oxygen demand levels and potentially depleting dissolved oxygen, crucial for aquatic organisms [@unitedstatesenvironmentalprotectionagencyepaDissolvedOxygenParameter2021]. The increased runoff also contributes to higher total residues, nitrogen, and nitrate concentrations, leading to eutrophication and harmful algal blooms [@unitedstatesenvironmentalprotectionagencyepaNutrientsParameterFactsheet2021]. Altered pH levels can further disrupt the ecological balance and water quality [@unitedstatesenvironmentalprotectionagencyepaPHParameterFactsheet2021].
+
+In @tbl-reg-deforestation-sensors I present regression results for the corellation between aggregate upstream deforestation and pollution. I find that an increase of deforestation by one percentage point is associated with a decrease in the water's pH level by 0.02 or -0.03 standard deviations, an increase in turbidity by 0.62 or 0.03 standard deviations and a decrease of the nitrate level by 0.04 or -0.06 standard deviations c.p.. These coefficients are statistically significant at the 1%, 5% and 1% level respectively. The increase in turbidity matches expectations while the decrease in average nitrate levels is surprising.
+
+{{< include /tables/reg_stations_deforestation.tex >}}
+
+To further shed a light on the mechanism of impact behind this correlation I now turn to the effect of the different replacing land cover types. For any deforestation event, I identify what trees were replaced by and group this into four categories: Pasture, agriculture, urban environments, and mining. In @tbl-reg-deforestation-sensors-replacement I present OLS results of this analysis, with otherwise equivalent model parameters to the above. I find that deforestation for pasture and agriculture are both similarily correlated with pollution. On average, if upstream areas are replaced by these two land cover categories, pH and turbidity levels are increased. For agriculture I also find that the amount of dissolved oxygen is significantly lower. Urban expansion is associated with decreased levels of turbidity and total residue, as well as increased levels of nitrogen. Finally, mining is shown to have the most strong corellation with water pollution, with one p.p. increase in mining replacement being associated with a significant dcrease in pH and a strong increase in turbidity, total residue and nitrate readings.
+
+{{< include /tables/reg_stations_deforestation_replacement.tex >}}
+
+Surprisingly, nitrogen readings are on average lower when there is increased farming activity upstream. Also, deforestation for pasture is negatively correlated with biochemical oxygen demand and total residue levels are on average lower when forest is replaced by agriculture. These results do not match the expected outcomes from environmental theory and raise concerns to the validity of my research design. I therefore want to stress that I do not claim any of the results in this section to be causal relationships. In @tbl-reg-deforestation-sensors-replacement-levels I present results when regressing on levels of land cover instead of deforestation events. Finally, in @ I observe how the effect of deforestation differs with the distance to the deforestation.
+
+## Cloud Coverage and Deforestation {#sec-cloud_cover-deforestation}
+
+
+
+{{< include /tables/reg_deforestation_DETER_first_stage.tex >}}
+
+{{< include /tables/reg_deforestation_DETER_mortality_tot.tex >}}
+
+{{< include /tables/reg_deforestation_DETER_mortality_l1.tex >}}
+
+{{< include /tables/reg_deforestation_DETER_hosp_rate.tex >}}
+
+{{< include /tables/reg_deforestation_DETER_ex_pop.tex >}}
 
 # Conclusions
 
@@ -88,7 +196,33 @@ Should the findings validate the hypothesis, they would underscore the broader r
 :::{#refs}
 :::
 
-# Methodological Appendix {.appendix}
+\setcounter{section}{0}
+\renewcommand{\thesection}{\Alph{section}}
 
-## Hydrological Model
+\setcounter{table}{0}
+\renewcommand{\thetable}{A\arabic{table}}
 
+\setcounter{figure}{0}
+\renewcommand{\thefigure}{A\arabic{figure}}
+
+# Appendix {.appendix}
+
+## Data {#sec-appendix-data}
+
+![Water Quality Measurement Stations](/figures/stations.png){#fig-stations}
+
+Land Cover Classes Table
+
+## Hydrological Model {#sec-appendix-hydro}
+
+Spatial Weighting Matrix
+
+## Empirical Findings
+
+{{< include /tables/reg_stations_deforestation_sd.tex >}}
+
+{{< include /tables/reg_stations_deforestation_replacement_levels.tex >}}
+
+{{< include /tables/reg_stations_deforestation_distance.tex >}}
+
+{{< include /tables/reg_deforestation_ols.tex >}}
