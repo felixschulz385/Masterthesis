@@ -10,24 +10,30 @@ setwd("/Users/felixschulz/Library/CloudStorage/OneDrive-Personal/Dokumente/Uni/M
 # Read data
 ###
 
-
 mortality <- read_parquet("data/mortality/mortality_panel.parquet") %>%
     rename(CC_2r = mun_id) %>% mutate(CC_2r = as.character(CC_2r))
+
 hospitalizations <- read_parquet("data/health/hospitalizations.parquet") %>%
     mutate(CC_2r = as.character(CC_2r))
+
 population <- read_csv("data/misc/raw/population.csv") %>%
     reframe(year = ano, CC_2r = id_municipio %>% as.character() %>% str_sub(1,6), population = populacao)
+
 births <- read_csv("data/mortality/raw/births.csv") %>%
     reframe(year = ano, CC_2r = id_municipio_nascimento %>% paste() %>% str_sub(1, 6), total_births)
+
 deforestation <- read_parquet("data/land_cover/deforestation_municipalities.parquet")
 climate <- read_parquet("data/climate/climate_data.parquet") %>%
     mutate(CC_2r = as.character(CC_2r)) %>% select(-`__index_level_0__`)
+
 cloud_cover_DETER <- read_parquet("data/cloud_cover/cloud_cover_DETER.parquet") %>% 
     mutate(CC_2r = as.character(CC_2r)) %>% rename("cloud_cover_DETER" = "cloud_cover")
+
 control_variables <- read_parquet("data/misc/control_variables.parquet") %>% mutate(CC_2r = as.character(CC_2r))
 
 municipalities <- st_read("data/boundaries/gadm41_BRA_2.json") %>%
     mutate(CC_2r = CC_2 %>% as.character() %>% str_sub(1, 6))
+    
 municipalities_simplified <- municipalities %>% st_make_valid() %>% st_simplify(dTolerance = 0.01)
 
 legal_amazon <- read_excel("data/boundaries/Municipios_da_Amazonia_Legal_2022.xlsx") %>%
@@ -234,7 +240,7 @@ small_panel <- analysis_subset %>%
 
 small_panel %>% check_balance(municipality, year)
 
-small_panel %>% write_parquet("data/analysis/small_panel.parquet")
+small_panel %>% write_csv("data/analysis/small_panel.csv")
 
 ## Compile small panel for infant mortality (2010-2020)
 
@@ -246,7 +252,7 @@ small_panel_l1 <- analysis_subset %>%
 
 small_panel_l1 %>% check_balance(municipality, year)
 
-small_panel_l1 %>% write_parquet("data/analysis/small_panel_l1.parquet")
+small_panel_l1 %>% write_csv("data/analysis/small_panel_l1.csv")
 
 ## Compile large panel (2005-2020)
 
@@ -258,7 +264,7 @@ large_panel <- analysis_subset %>%
 
 large_panel %>% check_balance(municipality, year)
 
-large_panel %>% write_parquet("data/analysis/large_panel.parquet")
+large_panel %>% write_csv("data/analysis/large_panel.csv")
 
 ## Compile large panel for infant mortality (2005-2020)
 
@@ -270,12 +276,12 @@ large_panel_l1 <- analysis_subset %>%
 
 large_panel_l1 %>% check_balance(municipality, year)
 
-large_panel_l1 %>% write_parquet("data/analysis/large_panel_l1.parquet")
+large_panel_l1 %>% write_csv("data/analysis/large_panel_l1.csv")
 
 
 ## Plot variable temporal ranges
 
-all_variables <- c("mortality_rate_tot", "mortality_rate_l1", "hosp_rate", "ex_pop", "deforestation_rate", "cloud_cover", "cloud_cover_DETER", "temperature", "precipitation", "gdp_pc", "educ_ideb", "vaccination_index_5y", "health_primary_care_coverage", "health_doctors_1000")
+all_variables <- c("mortality_rate_tot", "mortality_rate_l1", "hosp_rate", "ex_pop", "deforestation", "cloud_cover", "cloud_cover_DETER", "temperature", "precipitation", "gdp_pc", "educ_ideb", "vaccination_index_5y", "health_primary_care_coverage", "health_doctors_1000")
 all_variables_labels <- c("Mortality rate (total)", "Mortality rate (under 1)", "Hospitalization rate", "Expenditure per capita", "Deforestation rate", "Cloud cover", "Cloud cover (DETER)", "Temperature", "Precipitation", "GDP per capita", "Education (IDEB)", "Vaccination index (5y)", "Primary care coverage", "Doctors per 1000")
 
 analysis %>%
@@ -284,13 +290,13 @@ analysis %>%
     mutate(ymin = map_dbl(range, ~ min(.)),
            ymax = map_dbl(range, ~ max(.))) %>%
     ggplot(aes(x = ymin, xend = ymax, y = factor(variable), yend = factor(variable))) +
-    geom_segment(size = 5, lineend = 'round') +
+    geom_segment(linewidth = 5, lineend = 'round') +
     scale_y_discrete(limits = rev(all_variables), labels = rev(all_variables_labels)) +
     labs(x = "Year", y = NULL) +
     theme_minimal() +
     theme(axis.text.y = element_text(size = 12), axis.text.x = element_text(size = 12), axis.title = element_text(size = 14))
 
-ggsave("output/figures/variable_temporal_ranges.png", width = 7, height = 10, dpi = 300)
+ggsave("output/figures/variable_temporal_ranges.png", width = 3, height = 5, dpi = 300)
 
 # Plot panels on map
 
@@ -301,21 +307,27 @@ legal_amazon_boundary <- st_cast(legal_amazon_boundary, "MULTILINESTRING") %>% s
 # get longest line string
 legal_amazon_boundary <- legal_amazon_boundary[st_length(legal_amazon_boundary) == max(st_length(legal_amazon_boundary))]
 
-ggplot() +
+large_panel_plot <- ggplot() +
     geom_sf(data = municipalities_simplified, fill = "grey90", color = "black") +
-    geom_sf(data = legal_amazon_boundary, fill = NA, color = "red") +
-    geom_sf(data = municipalities_simplified %>% filter(CC_2r %in% large_panel$municipality), fill = "blue", color = "black") +
-    theme_minimal()
+    geom_sf(data = municipalities_simplified %>% filter(CC_2r %in% large_panel$municipality), aes(fill = "In Sample"), color = "black") +
+    geom_sf(data = legal_amazon_boundary, fill = NA, aes(color = "Legal Amazon"), linewidth = 2) +
+    scale_color_manual(values = c("Legal Amazon" = "purple"), name = "") +
+    scale_fill_manual(values = c("In Sample" = "yellow"), name = "") +
+    theme_minimal() +
+    theme(legend.position = "inside", legend.position.inside = c(.9, .3))
     
-ggsave("output/figures/large_panel_map.png", width = 7, height = 7, dpi = 300)
+ggsave("output/figures/large_panel_map.png", plot = large_panel_plot, width = 7, height = 7, dpi = 300)
 
-ggplot() +
+small_panel_plot <- ggplot() +
     geom_sf(data = municipalities_simplified, fill = "grey90", color = "black") +
-    geom_sf(data = legal_amazon_boundary, fill = NA, color = "red") +
-    geom_sf(data = municipalities_simplified %>% filter(CC_2r %in% small_panel$municipality), fill = "blue", color = "black") +
-    theme_minimal()
+    geom_sf(data = municipalities_simplified %>% filter(CC_2r %in% small_panel$municipality), aes(fill = "In Sample"), color = "black") +
+    geom_sf(data = legal_amazon_boundary, fill = NA, aes(color = "Legal Amazon"), linewidth = 2) +
+    scale_color_manual(values = c("Legal Amazon" = "purple"), name = "") +
+    scale_fill_manual(values = c("In Sample" = "yellow"), name = "") +
+    theme_minimal() +
+    theme(legend.position = "inside", legend.position.inside = c(.9, .3))
 
-ggsave("output/figures/small_panel_map.png", width = 7, height = 7, dpi = 300)
+ggsave("output/figures/small_panel_map.png", plot = small_panel_plot, width = 7, height = 7, dpi = 300)
 
 
 ###

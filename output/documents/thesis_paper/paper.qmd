@@ -1,9 +1,10 @@
 ---
-title: "Master Thesis"
-subtitle: "Economics of Sustainability and the Environment"
+title: "The negative external effects of deforestation on downstream populations in Brazil"
+subtitle: "Master Thesis"
 author: "Felix Schulz"
 format:
   pdf:
+    papersize: a4
     keep-tex: true
     toc: false
     number-sections: true
@@ -97,7 +98,7 @@ To address these endogeneity concerns, I utilize an instrumental variable (IV) a
 
 This gives rise to my identification strategy: Following an approach similar to @assuncaoDETERingDeforestationAmazon2023, I use data on cloud cover as an instrument for deforestation. The central rationale behind this approach is that high levels of cloud cover at a given forest site prohibit remote sensing and thereby also effective enforcement of anti-deforestation regulation. This may impact deforestation but is likely exogenous to public health outcomes downstream. The validity of this IV approach hinges on the instrument satisfying both relevance and exogeneity conditions. I test the relevance by checking the strength of the correlation between the instrument and deforestation, reporting first-stage F-tests for all model specifications. 
 
-Exogeneity requires the instrument to neither directly nor indirectly influence health outcomes through any other variable than deforestation. The most obvious concern is that increased cloud coverage comes in hand with weather conditions that have effects on public health. For example, increased rainfall may lead to a rise in waterborne diseases or vector-borne diseases like malaria and dengue fever, which are sensitive to changes in precipitation. The cumulative nature of my outcome variable helps alleviate this concern. Since the independent variable of interest is upstream deforestation, I aggregate deforestation in an area of up to 1000 kilometers in river length. The larger the distance, the less likely weather is going to impact health outcomes at a given municipality. Nevertheless, I do include weather controls, namely average precipitation and temperature in my models.
+Exogeneity requires the instrument to neither directly (*exogeneity*) nor indirectly influence health outcomes through any other variable than deforestation (*exclusion restriction*). The most obvious concern is that increased cloud coverage comes in hand with weather conditions that have effects on public health. For example, increased rainfall may lead to a rise in waterborne diseases or vector-borne diseases like malaria and dengue fever, which are sensitive to changes in precipitation. The cumulative nature of my outcome variable helps alleviate this concern. Since the independent variable of interest is upstream deforestation, I aggregate deforestation in an area of up to 1000 kilometers in river length. The larger the distance, the less likely weather is going to impact health outcomes at a given municipality. Nevertheless, I do include weather controls, namely average precipitation and temperature in my models.
 
 In @sec-cloud_cover-deforestation I estimate a difference-in-difference-in-differences (DDD) regression of deforestation on cloud cover that also serves as a placebo test to the main specification in this section. Finally, another concern is that cloud coverage may be reversely causated by deforestation. Over the past few decades, numerical simulations predict a decrease in cloud cover in some parts of the Amazon, particularly in regions experiencing extensive deforestation [@royMesoscaleVegetationAtmosphere2009]. This analysis is based on the theoretical finding that deforestation disrupts local hydrological cycles, reducing evapotranspiration and subsequent cloud formation [@lejeuneInfluenceAmazonianDeforestation2015]. On the contrary, empirical evidence from the Brazilian rainforest contradicts this, showing that deforestation is associated with increases in forest cover [@royMesoscaleVegetationAtmosphere2009, @xuContrastingImpactsForests2022]. In any case, there appears to be a theoretical and empirical link between cloud cover and deforestation. I am not able to rule out this reverse causality between the instrument and the endogenous regressor. In comparison to @assuncaoDETERingDeforestationAmazon2023, this is a more elevated issue in my work because I use cloud cover to directly instrument deforestation opposed to law enforcement activity. Any further findings should therefore be read keeping this in mind.
 
@@ -121,7 +122,7 @@ To ensure robust inference in the presence of potential correlation in the error
 
 # Data
 
-For my research I source and combine a selection of public data from the realms of environmental science, health and economics. For replication of data generation, please see section @sec-appendix-data.
+For my research I source and combine a selection of public data from the realms of environmental science, health and economics. For replication of data generation, please see section @sec-appendix-data. Not all data is available in all time periods. In figureFor my central analyis of deforestation and health outcomes, I subset data for which a complete panel without missing values is available. The municipalities included in these panels are shown in @ .
 
 ## Deforestation data
 
@@ -171,9 +172,13 @@ Surprisingly, nitrogen readings are on average lower when there is increased far
 
 ## Cloud Coverage and Deforestation {#sec-cloud_cover-deforestation}
 
+The theoretical and parts of the empirical evidence presented thus far suggest that deforestation leads to river pollution. If humans then get into contact with the contaminated water, there may be consequences for their health. In this chapter I seek to obtain causal evidence for this relationship. To this end I estimate the impact of aggregate upstream deforestation on a range of health indicators using an instrumental variable approach: As discussed in more detail above, cloud cover restricts efficient enforcement of deforestation restrictions. Areas with increased cloud cover are therefore subject to more deforestation. This variation in cloud cover is likely to be exogenous in regards to health outcomes and therefore a suitable instrument. 
 
+Before I turn to the results of the analysis, I first present results in favor of the relevancy of the instrument. In @tbl-reg-deter-first-stage I regress upstream DETER cloud coverage on upstream deforestation for all municipalities. I present four different specifications, each consecutively adding control variables. Since data on doctors and primary care coverage is only available from 2010 onwards, the last model is estimated on a restricted sample. I find that in all specifications cloud coverage is positively correlated with deforestation. A 10 percentage point increase in cloud coverage is associated with an increase in deforestation of between 1.2 and 2.4 percentage points. I also report first stage F-statistics below and find that all statistics are above the @stockTestingWeakInstruments2005 threshold of 10.
 
 {{< include /tables/reg_deforestation_DETER_first_stage.tex >}}
+
+If my identification strategy holds, any regression estimates that utilize the instrumented deforestation rate should retrieve the true, causal relationship between deforestation and 
 
 {{< include /tables/reg_deforestation_DETER_mortality_tot.tex >}}
 
@@ -209,7 +214,19 @@ Should the findings validate the hypothesis, they would underscore the broader r
 
 ## Data {#sec-appendix-data}
 
-![Water Quality Measurement Stations](/figures/stations.png){#fig-stations}
+![Water Quality Measurement Stations](/figures/stations.png){#fig-stations height=40%}
+
+![Temporal availability of analysis variables](/figures/variable_temporal_ranges.png){#fig-variable-temporal-ranges height=40%}
+
+
+::: {#fig-balanced-panels layout-nrow=2}
+
+![Large panel for extended controls between 2005-2020](/figures/large_panel_map.png){#fig-balanced-large-panel height=40%}
+
+![Small panel for full controls and hospitalization data between 2005-2020](/figures/small_panel_map.png){#fig-balanced-small-pane height=40%}
+
+Municipalities included in panels. *Note*: Because of missing values in the different variables, I have to exclude several municipalities to achieve a balanced panel. The resulting compositions are noted down here.
+:::
 
 Land Cover Classes Table
 
