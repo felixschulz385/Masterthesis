@@ -50,7 +50,7 @@ def compute_reachability_parallel(graph):
         # Return the results as a dictionary
         return zip(nodes, results)
 
-if __name__ == '__main__':
+def compute_reachability():
     # Import the river network shapefile
     rivers_brazil_shapefile = gpd.read_feather("/pfs/work7/workspace/scratch/tu_zxobe27-master_thesis/data/river_network/shapefile.feather")
     
