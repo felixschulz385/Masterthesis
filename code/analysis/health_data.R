@@ -546,7 +546,7 @@ analysis %>%
     theme_minimal() +
     theme(axis.text.y = element_text(size = 12), axis.text.x = element_text(size = 12), axis.title = element_text(size = 14))
 
-ggsave("output/figures/variable_temporal_ranges.png", width = 3, height = 5, dpi = 300)
+ggsave("output/figures/variable_temporal_ranges.png", width = 7, height = 5, dpi = 300)
 
 # Plot panels on map
 
@@ -606,6 +606,28 @@ weights_plot <- ggplot() +
 
 ggsave("output/figures/weights_example.png", plot = weights_plot, width = 6, height = 6, dpi = 300)
 
+###
+# Topology statistics
+###
+
+library(tidyverse)
+library(sf)
+
+topology <- arrow::read_feather("/Users/felixschulz/Library/CloudStorage/OneDrive-Personal/Dokumente/Uni/Masterthesis/data/river_network/topology.feather")
+
+topology$estuary %>% sum()
+# 1025
+topology$confluence %>% sum()
+# 123140
+topology$source %>% sum()
+# 125192
+
+# get the minimum and maximum non-na year for each variable
+analysis %>%
+    reframe(across(c(deforestation_rate, cloud_cover, cloud_cover_DETER, mortality_rate_tot_5y, hosp_rate, gdp_pc, educ_ideb, vaccination_index_5y, health_doctors_1000, urban_share, clean_water_share), ~ range(year[which(!is.na(.))])))
+
+analysis %>% names()
+
 
 ###
 # Exploratory Scatter Plots
@@ -657,29 +679,3 @@ internal_change <- full_join(mortality_yy, births, by = c("CC_2r", "year")) %>%
 
 
 
-
-census_agg %>%
-    group_by(year) %>%
-    summarise(across(pop_white:pop_from_state, mean))
-
-
-
-
-felm(hosp_rate ~ I(forest_upstream / total_upstream) + pop_white + pop_from_municipality | municipality + year | 0 | municipality + region_year, data = census_panel) %>% summary()
-
-lm(net_migration_share ~ I(-forest / total), data = test) %>% summary()
-
-test %>%
-    filter(CC_2r == 110001) %>%
-    View()
-analysis
-
-population
-
-lfe::felm(mortality_rate_tot ~ I(-forest / total) + pop_white + pop_from_municipality | CC_2r + year | 0 | CC_2r + region_year, data = test) %>% summary()
-
-
-
-analysis %>%
-    select(year) %>%
-    table()
