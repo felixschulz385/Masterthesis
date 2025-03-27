@@ -50,7 +50,6 @@ analysis_results <- analysis_results %>%
         formula = map(dep_var, ~ as.formula(paste0(.x, " ~ I(1 - d_forest_share) | station + year | 0 | estuary + estuary_year"))),
         model = map2(formula, dep_var, ~ felm(.x, data = analysis_panel %>% filter(year >= 2000) %>% filter_impute(.y)))
     )
-
 texreg(analysis_results$model,
     file = "output/tables/reg_stations_deforestation.tex",
     custom.model.names = dep_vars_table,
@@ -65,6 +64,17 @@ texreg(analysis_results$model,
     threeparttable = TRUE,
     scalebox = 0.8,
     dcolumn = TRUE
+)
+
+htmlreg(
+    file = "output/presentations/final_seminar/reg_stations_deforestation.html",
+    analysis_results$model[c(1, 3, 5, 7)],
+    custom.model.names = c("pH", "BOD5.20", "Total Residue", "Nitrates"),
+    custom.coef.names = c("Deforestation"),
+    caption = "",
+    stars = c(0.01, 0.05, 0.1),
+    padding = 12,    
+    include.rsquared = FALSE, include.adjrs = FALSE,
 )
 
 analysis_results <- analysis_results %>%
@@ -423,6 +433,23 @@ texreg(
     use.packages = FALSE,
     threeparttable = TRUE,
     scalebox = .9,
+)
+
+htmlreg(
+    list(
+        "Total Mortality" = second_stage_deter_mortality_tot[["B"]],
+        "Infant Mortality" = second_stage_deter_mortality_l1[["B"]],
+        "Hospitalization Rate" = second_stage_deter_hosp_rate[["B"]],
+        "Expenditure per Inhabitant" = second_stage_deter_ex_pop[["B"]]
+    ),
+    file = "output/presentations/final_seminar/reg_forest_DETER_all.html",
+    custom.coef.names = c("$\\widehat{\\text{Forest Cover}}$"),
+    caption = "",
+    omit.coef = c("(temperature)|(precipitation)|(gdp_pc)|(educ_ideb)|(vaccination_index_5y)|(health_primary_care_coverage)|(health_doctors_1000)"),
+    stars = c(0.01, 0.05, 0.1),
+    digits = 3,
+    padding = 12,
+    include.rsquared = FALSE, include.adjrs = FALSE,
 )
 
 

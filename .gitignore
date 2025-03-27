@@ -1,4 +1,5 @@
 # Data
+*.csv
 *.tif
 *.feather
 *.pkl
@@ -21,6 +22,9 @@
 *.bib
 *.tex
 *.png
+!output/figures/*.png
+*.jpg
+*.jpeg
 *.rds
 
 # System Files
@@ -30,8 +34,7 @@
 data/*/**
 aux/
 output/documents/*/*/**
-output/presentations/update/images/**
-output/presentations/update/update_files/**
+output/presentations/
 data/*/**
 api_creds
 setup/miniforge3/*

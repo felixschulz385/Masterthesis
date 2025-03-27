@@ -2,23 +2,23 @@
 
 This repository contains the code and data used in the master thesis "Deforestation, Water Quality and Health Externalities in Brazil" by [Felix Schulz](https://felixschulz385.github.io/).
 
-## Table of Contents
+## 🧭 Introduction
 
-- [Master Thesis: Deforestation, Water Quality and Health Externalities in Brazil](#master-thesis-deforestation-water-quality-and-health-externalities-in-brazil)
-  - [Table of Contents](#table-of-contents)
-  - [Introduction](#introduction)
-  - [About](#about)
-  - [License](#license)
+This thesis examines the causal impact of deforestation on water quality and public health outcomes in Brazil. By integrating remote sensing, hydrological, environmental, and health datasets, the analysis traces how upstream deforestation contributes to soil erosion and contaminates downstream water sources—ultimately affecting mortality rates and healthcare utilization.
 
-## Introduction
+To do this, I construct a detailed geospatial river network model of Brazil and compute corresponding drainage polygons. Deforestation data is spatially aggregated within these drainage areas and propagated through the river system. The resulting dataset forms the basis for an econometric analysis of environmental health externalities.
 
-In this thesis, I investigate the impact of deforestation on water quality and health in Brazil. I use a combination of remote sensing data, water quality data, and health data to try to estimate the causal effect of deforestation on public health through soil erosion. The thesis is divided into two main parts. First, I build a vision transformer to evaluate the potential of using neural networks as student models to existing solutions as a cost-efficient alternative. In the second part I provide an econometric analysis of the impact of deforestation on water quality and mortality rates through soil erosion.
+![Drainage polygon processing](/output/figures/drainage_preprocessing_example.png)
 
-![Early-stage visualization comparing existing data sources for deforestation](/output/figures/verification.png)
+## 🗂 Repository Structure
 
-## About
+This repository includes:
 
-This repository contains the full documentation, datasets, and codebase used in my research. In /code, you can find the modularized code used to process the data, run the analysis, and generate the figures. This project is notebook-first, meaning all code execution is performed from Jupyter notebooks. The notebooks are organized in a way that allows for easy reproducibility and understanding of the research process.
+- **📁 `/code/`** – Modular scripts for data processing, exploratory analysis, and econometric modeling (primarily in R and Python).
+- **📁 `/output/`** – Figures, intermediate results, and visualizations used in the thesis.
+- **📁 `/data/`** – Replication data is available on request.
+
+![Graphic illustrating the project workflow](/output/figures/data_workflow.png)
 
 ## License
 
