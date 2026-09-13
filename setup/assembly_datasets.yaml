@@ -14,9 +14,14 @@
 # climate's `climate_variable` x `distance_bucket`); `filter` narrows to one
 # row per (join_keys, category value) and `pivot_column`/`value_columns`
 # pivot the category's values into `{category_value}_{value_column}` columns.
+# `type: grouped_sum` marks sources long over some other non-join-key
+# dimension (e.g. population's `sex`/`age_group`); `variables` are summed
+# across that dimension, collapsing to one row per `join_keys` before the
+# merge -- otherwise a many-to-one merge against a source's raw stratified
+# rows fails outright.
 # Every variable is coerced to float dtype unless listed under a source's
-# `categorical_variables` (e.g. population's `sex`/`age_group`); this catches
-# upstream columns that round-tripped through parquet as strings.
+# `categorical_variables` (e.g. biome_adm2's dominant-biome label); this
+# catches upstream columns that round-tripped through parquet as strings.
 
 datasets:
   - id: sensor_panel
@@ -358,14 +363,17 @@ datasets:
           - 2t_daily_max
       - name: population
         path: data/population/processed/population.parquet
+        # population.parquet is long over sex/age_group (one row per
+        # (mun_id, year, sex, age_group)); `grouped_sum` collapses those
+        # strata into a single total-population value per (mun_id, year)
+        # before the merge, which otherwise fails `validate="many_to_one"`.
+        # The stratified breakdown remains available in population.parquet
+        # itself for any future health metric (e.g. a fertility rate) that
+        # needs a specific age/sex denominator.
+        type: grouped_sum
         join_keys: [mun_id, year]
         variables:
-          - sex
-          - age_group
           - population
-        # sex/age_group are categorical labels, not measurements -- exclude
-        # them from the numeric-dtype enforcement applied to other variables.
-        categorical_variables: [sex, age_group]
       - name: biome_adm2
         path: data/biomes/processed/biomes_adm2.parquet
         join_keys: [mun_id]

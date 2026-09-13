@@ -23,6 +23,7 @@ from .constants import (
     CLIMATE_BUCKETED_SOURCE_TYPE,
     DATE_COLUMN,
     DATETIME_COLUMN,
+    GROUPED_SUM_SOURCE_TYPE,
     LAND_COVER_BUCKETED_SOURCE_TYPE,
     LONG_PIVOT_SOURCE_TYPE,
     SENSOR_MODE,
@@ -139,6 +140,22 @@ def _pivot_long_source(frame, source):
     return wide.reset_index()
 
 
+def _aggregate_grouped_sum_source(frame, source):
+    """Collapse a table long over some non-join-key dimension by summing.
+
+    Used for sources like population's raw table, which is long over
+    `sex`/`age_group` (one row per (join_keys, sex, age_group)) -- summing
+    each variable across those strata yields one row per `source.join_keys`,
+    as `validate="many_to_one"` requires downstream. `min_count=1` keeps a
+    group whose contributing rows are all null as null rather than a
+    fabricated 0 (the same reasoning as the climate bucket-weighting case
+    above: "unknown" and "genuinely zero" must stay distinguishable).
+    """
+    return frame.groupby(list(source.join_keys), as_index=False)[list(source.variables)].sum(
+        min_count=1
+    )
+
+
 def _load_source_frame(source, *, root_dir):
     """Load one configured source and return it alongside its canonical join keys.
 
@@ -183,6 +200,8 @@ def _load_source_frame(source, *, root_dir):
         )
     elif source.type == LONG_PIVOT_SOURCE_TYPE:
         frame = _pivot_long_source(frame, source)
+    elif source.type == GROUPED_SUM_SOURCE_TYPE:
+        frame = _aggregate_grouped_sum_source(frame, source)
 
     for datetime_like_column in (DATE_COLUMN, DATETIME_COLUMN):
         if datetime_like_column in frame.columns:

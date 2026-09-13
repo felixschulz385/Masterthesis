@@ -42,7 +42,7 @@ class AssemblySource:
     kernel: str | None = None
     bandwidth: float | None = None
     # Variables that are categorical/identifiers rather than measurements
-    # (e.g. population's `sex`/`age_group`) and must be excluded from the
+    # (e.g. biome_adm2's dominant-biome label) and must be excluded from the
     # numeric-dtype coercion `build._load_source_frame` applies to variables.
     categorical_variables: tuple[str, ...] = ()
 

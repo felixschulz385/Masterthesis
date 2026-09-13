@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from src.data.assembly.build import (
+    _aggregate_grouped_sum_source,
     _compute_kernel_weighted_bucket_values,
     _pivot_long_source,
     assemble_dataset,
@@ -13,6 +14,7 @@ from src.data.assembly.build import (
 from src.data.assembly.constants import (
     ADM2_MODE,
     CLIMATE_BUCKETED_SOURCE_TYPE,
+    GROUPED_SUM_SOURCE_TYPE,
     LAND_COVER_BUCKETED_SOURCE_TYPE,
     LONG_PIVOT_SOURCE_TYPE,
     SENSOR_MODE,
@@ -288,6 +290,81 @@ def test_compute_kernel_weighted_bucket_values_returns_nan_when_all_buckets_null
     # Both buckets fall within the uniform kernel's bandwidth -> equal weight
     # -> simple average of the two bucket means.
     assert row_b == pytest.approx(20.0)
+
+
+def test_assemble_dataset_adm2_mode_sums_grouped_population_strata(tmp_path):
+    # population.parquet is long over sex/age_group -- multiple rows per
+    # (mun_id, year) -- which would otherwise fail assembly's
+    # `validate="many_to_one"` merge once a second source is joined in.
+    land_cover = pd.DataFrame(_bucket_rows("mun_id", "123456", 2019, 0))
+    land_cover_path = tmp_path / "land_cover_adm2.parquet"
+    land_cover.to_parquet(land_cover_path, index=False)
+
+    population = pd.DataFrame(
+        {
+            "mun_id": ["123456", "123456", "123456", "123456"],
+            "year": [2019, 2019, 2019, 2019],
+            "sex": ["female", "female", "male", "male"],
+            "age_group": ["00_04", "05_09", "00_04", "05_09"],
+            "population": [10.0, 20.0, 15.0, 25.0],
+        }
+    )
+    population_path = tmp_path / "population.parquet"
+    population.to_parquet(population_path, index=False)
+
+    dataset_config = AssemblyDataset(
+        id="adm2_panel",
+        mode=ADM2_MODE,
+        index=("mun_id", "year"),
+        output_path=str(tmp_path / "out.parquet"),
+        sources=(
+            AssemblySource(
+                name="land_cover_adm2",
+                path="land_cover_adm2.parquet",
+                join_keys=("mun_id", "year"),
+                variables=("lc_forest", "lc_water"),
+                type=LAND_COVER_BUCKETED_SOURCE_TYPE,
+            ),
+            AssemblySource(
+                name="population",
+                path="population.parquet",
+                join_keys=("mun_id", "year"),
+                variables=("population",),
+                type=GROUPED_SUM_SOURCE_TYPE,
+            ),
+        ),
+    )
+
+    result = assemble_dataset(dataset_config, root_dir=tmp_path)
+
+    assert result["mun_id"].tolist() == ["123456"]
+    assert result["population"].tolist() == pytest.approx([70.0])
+
+
+def test_aggregate_grouped_sum_source_keeps_all_null_group_as_null():
+    # A mun_id/year whose strata are all missing must sum to NaN ("unknown"),
+    # not a fabricated 0.0 that would be indistinguishable from a genuine
+    # zero population downstream.
+    frame = pd.DataFrame(
+        {
+            "mun_id": ["123456", "123456", "654321"],
+            "year": [2019, 2019, 2019],
+            "population": [np.nan, np.nan, 5.0],
+        }
+    )
+    source = AssemblySource(
+        name="population",
+        path="population.parquet",
+        join_keys=("mun_id", "year"),
+        variables=("population",),
+        type=GROUPED_SUM_SOURCE_TYPE,
+    )
+
+    result = _aggregate_grouped_sum_source(frame, source)
+
+    row = result.set_index("mun_id")["population"]
+    assert np.isnan(row.loc["123456"])
+    assert row.loc["654321"] == pytest.approx(5.0)
 
 
 def test_write_dataset_writes_parquet(tmp_path):
