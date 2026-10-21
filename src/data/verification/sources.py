@@ -243,6 +243,7 @@ def _river_network_list_fetched(root_dir, force: bool = False) -> FetchListing:
 def _river_network_check_outputs(root_dir) -> list[OutputArtifactCheck]:
     from src.data.sources.river_network.constants import (
         ADM2_DOMINANT_SYSTEM_TABLE_FILENAME,
+        ADM2_OTTO_BASINS_FILENAME,
         DRAINAGE_AREAS_FILENAME,
         OTTO_BASINS_FILENAME,
         PROCESSED_DIR,
@@ -292,6 +293,15 @@ def _river_network_check_outputs(root_dir) -> list[OutputArtifactCheck]:
             ],
         ),
         _artifact_check(
+            "adm2_otto_basins",
+            river_dir / ADM2_OTTO_BASINS_FILENAME,
+            lambda frame: [
+                check_required_columns(frame, ["adm2", *OTTO_BASIN_COLUMNS]),
+                _non_empty_check(frame),
+                _uniqueness_check(frame, "adm2"),
+            ],
+        ),
+        _artifact_check(
             "adm2_dominant_systems",
             river_dir / ADM2_DOMINANT_SYSTEM_TABLE_FILENAME,
             lambda frame: [
@@ -319,6 +329,7 @@ def _river_network_check_fetched(root_dir) -> list[OutputArtifactCheck]:
 def _river_network_fingerprint_paths(root_dir) -> list[Path]:
     from src.data.sources.river_network.constants import (
         ADM2_DOMINANT_SYSTEM_TABLE_FILENAME,
+        ADM2_OTTO_BASINS_FILENAME,
         DEFAULT_RAW_GPKG_PATH,
         DRAINAGE_AREAS_FILENAME,
         OTTO_BASINS_FILENAME,
@@ -335,6 +346,7 @@ def _river_network_fingerprint_paths(root_dir) -> list[Path]:
         river_dir / TRENCH_ADM2_TABLE_FILENAME,
         river_dir / ADM2_DOMINANT_SYSTEM_TABLE_FILENAME,
         river_dir / OTTO_BASINS_FILENAME,
+        river_dir / ADM2_OTTO_BASINS_FILENAME,
     ]
 
 

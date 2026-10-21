@@ -18,6 +18,7 @@ SYSTEM_MATRICES_FILENAME = "river_network_system_matrices.pkl"
 TRENCH_ADM2_TABLE_FILENAME = "river_network_trench_adm2_matches.parquet"
 ADM2_DOMINANT_SYSTEM_TABLE_FILENAME = "river_network_adm2_dominant_systems.parquet"
 OTTO_BASINS_FILENAME = "river_network_otto_basins.parquet"
+ADM2_OTTO_BASINS_FILENAME = "river_network_adm2_otto_basins.parquet"
 DEFAULT_ADM2_LAYER = "ADM_ADM_2"
 BRAZIL_PROJECTED_CRS = 5641
 

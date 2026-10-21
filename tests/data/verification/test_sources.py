@@ -27,7 +27,7 @@ def test_river_network_check_outputs_missing_files(tmp_path):
 
     artifacts = adapter.check_outputs(tmp_path)
 
-    assert len(artifacts) == 5
+    assert len(artifacts) == 6
     assert all(not artifact.exists for artifact in artifacts)
     assert all(not artifact.ok for artifact in artifacts)
 
@@ -80,6 +80,10 @@ def test_river_network_check_outputs_passes_valid_data(tmp_path):
         {"trench_id": [1, 2], **{f"otto_basin_l{level}": ["745539"[:level]] * 2 for level in range(1, 7)}}
     )
     otto_basins.to_parquet(river_dir / "river_network_otto_basins.parquet", index=False)
+    adm2_otto_basins = pd.DataFrame(
+        {"adm2": ["X"], **{f"otto_basin_l{level}": ["745539"[:level]] for level in range(1, 7)}}
+    )
+    adm2_otto_basins.to_parquet(river_dir / "river_network_adm2_otto_basins.parquet", index=False)
 
     adapter = SOURCE_ADAPTERS["river_network"]
     artifacts = adapter.check_outputs(tmp_path)

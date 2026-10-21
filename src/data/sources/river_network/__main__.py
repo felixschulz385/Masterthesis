@@ -25,9 +25,10 @@ def configure_logging(level: str = "INFO") -> None:
 def configure_parser(parser, include_action=True):
     """Add river-network CLI arguments to ``parser``."""
     if include_action:
-        # `otto-basins` (re)builds only `river_network_otto_basins.parquet` from
-        # the raw geopackage's attributes, without rerunning the full network
-        # and matrix pipeline that `preprocess` runs.
+        # `otto-basins` (re)builds only `river_network_otto_basins.parquet` (and
+        # its ADM2 assignment table) from the raw geopackage's attributes,
+        # without rerunning the full network and matrix pipeline that
+        # `preprocess` runs.
         parser.add_argument("action", choices=["preprocess", "otto-basins"])
     parser.add_argument("--gpkg-path", default=DEFAULT_RAW_GPKG_PATH)
     parser.add_argument("--output-dir", default=PROCESSED_DIR)
