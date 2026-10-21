@@ -187,6 +187,19 @@ datasets:
         # stays a clean integer/categorical grouping key (e.g. for
         # basin-level clustering in regressions).
         categorical_variables: [system_id]
+      - name: otto_basins
+        path: data/river_network/processed/river_network_otto_basins.parquet
+        join_keys: [trench_id]
+        variables:
+          - otto_basin_l2
+          - otto_basin_l3
+          - otto_basin_l4
+          - otto_basin_l5
+        # Nested Otto Pfafstetter sub-basin codes of the station's trench (see
+        # src.data.sources.river_network.otto_basins) -- the clustering unit for
+        # inference, since system_id is dominated by one huge connected system.
+        # String codes, not measurements: exclude from numeric-dtype enforcement.
+        categorical_variables: [otto_basin_l2, otto_basin_l3, otto_basin_l4, otto_basin_l5]
       - name: land_cover_sensor_upstream
         path: data/land_cover/processed/aggregate/land_cover_sensor_upstream.parquet
         type: land_cover_bucketed
