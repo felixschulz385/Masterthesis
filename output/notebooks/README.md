@@ -28,9 +28,9 @@ Other notebooks:
 
 ## Shared code
 
-- `src/analysis/panels.py`: panel loaders (restricted to the 1985–2024 exposure window),
-  variable groups derived from `setup/assembly_datasets.yaml`, and temporary health
-  loaders (see below).
+- `src/analysis/panels.py`: panel loaders (restricted to the 1985–2024 exposure window)
+  and variable groups derived from `setup/assembly_datasets.yaml`, including the
+  health column groups.
 - `src/analysis/pollution.py`: the pollution model setup (sample rules, outcome cleaning,
   combined fecal indicator, CONAMA 357 exceedances, land cover recomputed within 200 km
   and per distance band). `build_pollution_panel()` returns the estimation frame.
@@ -48,10 +48,11 @@ and implemented in `pollution/02_analysis.ipynb`, with standard errors clustered
 level-3 sub-basins (below). Coefficients are exported to
 `output/analysis/pollution/coefficients.csv`.
 
-**Health: parked.** Estimation is blocked by data issues: health outcomes are not in
-assembly, morbidity channels are broken from 2008 on, and the exposure definition drops
-headwater municipalities and local land use. See [`health/README.md`](health/README.md)
-for the blockers and the resume checklist.
+**Health: model setup next.** `adm2_panel` has health outcomes, Otto basins, local and
+upstream exposure (inv-sqrt kernel) and local climate, and keeps headwater municipalities.
+Open data issues (need a DATASUS re-fetch): morbidity channels are broken from 2008 on,
+some birth bins are missing, and there is no mortality data. See
+[`health/README.md`](health/README.md) for the remaining blockers.
 
 ## Sub-basins (Otto Pfafstetter)
 
@@ -84,9 +85,9 @@ built-in `wildboottest` is infeasible here: it builds a dense one-hot matrix of 
 equivalent by Frisch–Waugh–Lovell. Results are in
 `output/analysis/pollution/wild_cluster_bootstrap.csv`.
 
-Still open:
-- **Health:** assign each municipality its dominant Otto-3 basin (by area) in the ADM2
-  assembly (`health/README.md`, blocker 8).
+`adm2_panel` carries the same levels for each municipality's dominant basin (largest
+summed drainage area of its intersecting trenches, from
+`river_network_adm2_otto_basins.parquet`).
 
 ## Mining arm
 
