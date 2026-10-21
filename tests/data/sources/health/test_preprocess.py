@@ -8,6 +8,7 @@ from src.data.sources.health.preprocess.preprocess import (
     _coerce_tabnet_numeric,
     _preprocess_sih_icd10_chapter_request,
     _read_datasus_csv,
+    build_birth_summary,
 )
 
 
@@ -90,3 +91,45 @@ def test_read_datasus_csv_drops_all_trailing_total_rows(tmp_path: Path):
 
     assert "Total" not in frame.iloc[:, 0].tolist()
     assert len(frame) == 2
+
+
+def test_build_birth_summary_counts_low_weight_and_preterm_across_bin_layouts():
+    birth_weight = pd.DataFrame(
+        {
+            "mun_id": ["123456", "654321"],
+            "year": [2005, 2015],
+            "Menos de 500g": [0.0, 1.0],
+            "500 a 999g": [1.0, 0.0],
+            "1000 a 1499 g": [0.0, 0.0],
+            "1500 a 2499 g": [2.0, 3.0],
+            "2500 a 2999 g": [3.0, 4.0],
+            "3000 a 3999 g": [10.0, 10.0],
+            "4000g e mais": [1.0, 1.0],
+            "Ignorado": [1.0, 0.0],
+            "Total": [18.0, 19.0],
+        }
+    )
+    # Before ~2011 28-36 weeks is one bin; afterwards it is split 28-31/32-36.
+    gestational_duration = pd.DataFrame(
+        {
+            "mun_id": ["123456", "654321"],
+            "year": [2005, 2015],
+            "Menos de 22 semanas": [0.0, 0.0],
+            "De 22 a 27 semanas": [1.0, 0.0],
+            "De 28 a 36 semanas, não especificado": [2.0, None],
+            "De 37 a 41 semanas": [14.0, 15.0],
+            "42 semanas ou mais": [0.0, 0.0],
+            "Ignorado": [1.0, 0.0],
+            "De 28 a 31 semanas": [None, 1.0],
+            "De 32 a 36 semanas": [None, 3.0],
+            "Total": [18.0, 19.0],
+        }
+    )
+
+    summary = build_birth_summary(birth_weight, gestational_duration).set_index("mun_id")
+
+    assert summary.loc["123456", "births_low_weight"] == 3.0
+    assert summary.loc["123456", "births_weight_known"] == 17.0
+    assert summary.loc["123456", "births_preterm"] == 3.0
+    assert summary.loc["654321", "births_preterm"] == 4.0
+    assert summary.loc["654321", "births_gestation_known"] == 19.0

@@ -9,6 +9,7 @@ from src.data.shared.batches import load_manifest
 from src.data.sources.health.fetch.datasus import SIH_CHANNEL_METRICS, SIH_SELECTED_MORBIDITY_CHANNELS
 from src.data.sources.health.fetch.datasus import SIH_ALL_METRICS_KEY
 from ..constants import (
+    BIRTHS_FILENAME,
     HEALTH_DATASET_NAME,
     HOSPITALIZATIONS_FILENAME,
     HOSPITALIZATIONS_ICD10_CHAPTER_FILENAME,
@@ -878,12 +879,62 @@ def preprocess_birth_outcome_tables(root_dir=".", outcome_names=None):
         cleaned.to_parquet(output_path, index=False)
         outputs[outcome_name] = output_path
 
+    if {"gestational_duration", "birth_weight"}.issubset(selected_outcomes):
+        outputs["births"] = write_birth_summary_table(root_dir=root_dir)
     return outputs
+
+
+LOW_BIRTH_WEIGHT_BINS = ["Menos de 500g", "500 a 999g", "1000 a 1499 g", "1500 a 2499 g"]
+# 28-36 weeks is reported either as one bin or split into 28-31/32-36
+# depending on the year; summing with min_count=0 covers both layouts.
+PRETERM_BINS = [
+    "Menos de 22 semanas",
+    "De 22 a 27 semanas",
+    "De 28 a 36 semanas, não especificado",
+    "De 28 a 31 semanas",
+    "De 32 a 36 semanas",
+]
+
+
+def build_birth_summary(birth_weight, gestational_duration):
+    """Collapse the cleaned birth-weight and gestation tables into counts per (mun_id, year).
+
+    `*_known` counts exclude the "Ignorado" bin and are the denominators of the
+    low-birth-weight and preterm shares.
+    """
+    births = birth_weight[["mun_id", "year"]].copy()
+    births["births"] = birth_weight["Total"]
+    births["births_weight_known"] = birth_weight["Total"] - birth_weight["Ignorado"]
+    births["births_low_weight"] = birth_weight[LOW_BIRTH_WEIGHT_BINS].sum(axis=1)
+
+    preterm = gestational_duration[["mun_id", "year"]].copy()
+    preterm["births_gestation_known"] = gestational_duration["Total"] - gestational_duration["Ignorado"]
+    preterm["births_preterm"] = gestational_duration.reindex(columns=PRETERM_BINS).sum(axis=1, min_count=0)
+    summary = births.merge(preterm, on=["mun_id", "year"], how="outer", validate="one_to_one")
+    value_columns = [column for column in summary.columns if column not in {"mun_id", "year"}]
+    summary[value_columns] = summary[value_columns].astype("float64")
+    return summary
+
+
+def write_birth_summary_table(root_dir="."):
+    """Build `health_births.parquet` from the processed birth-outcome tables.
+
+    Reads the processed (not raw) tables, so it can be rerun without re-fetching SINASC.
+    """
+    processed_dir = _processed_dir(root_dir)
+    summary = build_birth_summary(
+        pd.read_parquet(os.path.join(processed_dir, birth_outcome_filename("birth_weight"))),
+        pd.read_parquet(os.path.join(processed_dir, birth_outcome_filename("gestational_duration"))),
+    )
+    output_path = os.path.join(processed_dir, BIRTHS_FILENAME)
+    summary.to_parquet(output_path, index=False)
+    logger.info("Wrote %s (%d rows)", output_path, len(summary))
+    return output_path
 
 
 def preprocess_health_data(root_dir=".", subtype="all"):
     """Dispatch health-data preprocessors."""
-    valid_subtypes = {"all", "mortality", "hospitalization", "birth"}
+    valid_subtypes = {"all", "mortality", "hospitalization", "birth", "birth_summary"}
     if subtype not in valid_subtypes:
         raise ValueError(
             f"Invalid subtype: {subtype}. Choose from: {', '.join(sorted(valid_subtypes))}"
@@ -896,4 +947,6 @@ def preprocess_health_data(root_dir=".", subtype="all"):
         outputs["hospitalization"] = preprocess_hospitalization_tables(root_dir=root_dir)
     if subtype in {"all", "birth"}:
         outputs["birth"] = preprocess_birth_outcome_tables(root_dir=root_dir)
+    if subtype == "birth_summary":
+        outputs["birth_summary"] = write_birth_summary_table(root_dir=root_dir)
     return outputs

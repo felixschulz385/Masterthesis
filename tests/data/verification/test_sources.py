@@ -876,7 +876,7 @@ def test_health_check_outputs_all_missing(tmp_path):
 
     artifacts = adapter.check_outputs(tmp_path)
 
-    assert len(artifacts) == 5
+    assert len(artifacts) == 6
     assert all(not artifact.exists for artifact in artifacts)
 
 

@@ -24,7 +24,9 @@ def configure_parser(parser, include_action=True):
         parser.add_argument("action", choices=["fetch", "preprocess"])
     parser.add_argument(
         "--subtype",
-        choices=["all", "mortality", "hospitalization", "birth"],
+        # `birth_summary` rebuilds only health_births.parquet from the processed
+        # birth-outcome tables (no raw SINASC files needed).
+        choices=["all", "mortality", "hospitalization", "birth", "birth_summary"],
         default="all",
     )
     parser.add_argument("--root-dir", default=".")

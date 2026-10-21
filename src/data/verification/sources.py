@@ -1043,6 +1043,7 @@ def _health_output_files() -> tuple[str, ...]:
         HOSPITALIZATIONS_FILENAME,
         HOSPITALIZATIONS_ICD10_CHAPTER_FILENAME,
         HOSPITALIZATIONS_SELECTED_MORBIDITY_LIST_FILENAME,
+        BIRTHS_FILENAME,
         birth_outcome_filename,
     )
 
@@ -1052,6 +1053,7 @@ def _health_output_files() -> tuple[str, ...]:
         HOSPITALIZATIONS_SELECTED_MORBIDITY_LIST_FILENAME,
         birth_outcome_filename("birth_weight"),
         birth_outcome_filename("gestational_duration"),
+        BIRTHS_FILENAME,
     )
 
 
@@ -1059,6 +1061,12 @@ def _health_birth_outcome_files() -> set[str]:
     from src.data.sources.health.constants import birth_outcome_filename
 
     return {birth_outcome_filename("birth_weight"), birth_outcome_filename("gestational_duration")}
+
+
+def _health_births_summary_file() -> str:
+    from src.data.sources.health.constants import BIRTHS_FILENAME
+
+    return BIRTHS_FILENAME
 
 
 _HEALTH_OUTPUT_FILES = _health_output_files()
@@ -1071,6 +1079,17 @@ _HEALTH_HOSPITALIZATION_REQUIRED_COLUMNS = ["municipality_code", "year", "metric
 # per-category count columns, and a "Total" column -- all non-negative counts.
 _HEALTH_BIRTH_OUTCOME_FILES = _health_birth_outcome_files()
 _HEALTH_BIRTH_OUTCOME_REQUIRED_COLUMNS = ["mun_id", "year", "Total"]
+# The derived births summary (write_birth_summary_table) is wide by (mun_id, year).
+_HEALTH_BIRTHS_SUMMARY_FILE = _health_births_summary_file()
+_HEALTH_BIRTHS_SUMMARY_REQUIRED_COLUMNS = [
+    "mun_id",
+    "year",
+    "births",
+    "births_weight_known",
+    "births_low_weight",
+    "births_gestation_known",
+    "births_preterm",
+]
 
 
 def _health_list_fetched(root_dir, force: bool = False) -> FetchListing:
@@ -1099,7 +1118,9 @@ def _health_list_fetched(root_dir, force: bool = False) -> FetchListing:
 def _health_check_outputs(root_dir) -> list[OutputArtifactCheck]:
     def build_checks(frame, filename):
         checks = [_non_empty_check(frame)]
-        if filename in _HEALTH_BIRTH_OUTCOME_FILES:
+        if filename == _HEALTH_BIRTHS_SUMMARY_FILE:
+            checks.append(check_required_columns(frame, _HEALTH_BIRTHS_SUMMARY_REQUIRED_COLUMNS))
+        elif filename in _HEALTH_BIRTH_OUTCOME_FILES:
             checks.append(check_required_columns(frame, _HEALTH_BIRTH_OUTCOME_REQUIRED_COLUMNS))
             if "Total" in frame.columns:
                 checks.append(

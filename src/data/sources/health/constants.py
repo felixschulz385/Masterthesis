@@ -31,6 +31,11 @@ MORTALITY_PRE_1996_FILENAME = "health_scraping_pre_1996.csv"
 MORTALITY_POST_1996_FILENAME = "health_scraping_post_1996.csv"
 
 
+# Per-municipality-year birth counts derived from the two birth-outcome tables
+# (write_birth_summary_table): births, low-birth-weight and preterm counts.
+BIRTHS_FILENAME = "health_births.parquet"
+
+
 def birth_outcome_filename(outcome_name: str) -> str:
     """Processed birth-outcome output filename (preprocess_birth_outcome_tables)."""
     return f"health_{outcome_name}.parquet"
