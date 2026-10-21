@@ -90,3 +90,25 @@ datasets:
 
     with pytest.raises(ValueError, match="unknown type"):
         load_assembly_config(config_path)
+
+
+def test_load_assembly_config_rejects_local_scope_on_unbucketed_source(tmp_path):
+    config_path = tmp_path / "assembly_datasets.yaml"
+    config_path.write_text(
+        """
+datasets:
+  - id: adm2_panel
+    mode: adm2
+    index: [mun_id, year]
+    output_path: out.parquet
+    sources:
+      - name: population
+        path: a.parquet
+        scope: local
+        join_keys: [mun_id, year]
+        variables: [population]
+"""
+    )
+
+    with pytest.raises(ValueError, match="only applies to bucketed sources"):
+        load_assembly_config(config_path)
