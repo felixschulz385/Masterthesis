@@ -138,6 +138,20 @@ class DatasusTabnetForm:
     def select_option_value(self, value):
         self._click_option(f"//option[@value='{value}']")
 
+    def select_only_option_value(self, value):
+        """Make `value` the only selected option of its select.
+
+        Clicking a period option (`select_option_value`) toggles it on top of
+        the form's preselected latest period, so a query would sum both years.
+        """
+        select = self.driver.find_element(By.XPATH, f"//option[@value='{value}']/parent::select")
+        self.set_multiselect_values(select.get_attribute("name"), [value], clear_first=True)
+
+    def list_option_values_with_prefix(self, prefix):
+        """Values of every option (any select) whose value starts with `prefix`."""
+        options = self.driver.find_elements(By.XPATH, f"//option[starts-with(@value, '{prefix}')]")
+        return [option.get_attribute("value") for option in options]
+
     def select_options_with_value_fragment(self, fragment, pause_seconds=0.2):
         options = self.driver.find_elements(By.XPATH, f"//option[contains(@value, '{fragment}')]")
         for option in options:

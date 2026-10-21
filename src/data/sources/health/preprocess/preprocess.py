@@ -7,7 +7,7 @@ import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from src.data.shared.batches import load_manifest
 from src.data.sources.health.fetch.datasus import SIH_CHANNEL_METRICS, SIH_SELECTED_MORBIDITY_CHANNELS
-from src.data.sources.health.fetch.datasus import SIH_ALL_METRICS_KEY
+from src.data.sources.health.fetch.datasus import SIH_ALL_METRICS_KEY, tabnet_year_from_code
 from ..constants import (
     BIRTHS_FILENAME,
     HEALTH_DATASET_NAME,
@@ -253,7 +253,7 @@ def _empty_morbidity_hospitalization_frame():
 
 def _clean_mortality_age_frame(frame):
     frame = frame.copy()
-    frame["year"] = frame["year_code"].astype(int).apply(lambda year: year + 1900 if year > 22 else year + 2000)
+    frame["year"] = frame["year_code"].map(tabnet_year_from_code)
 
     age_columns = [
         "Menor 1 ano",
