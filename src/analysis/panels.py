@@ -121,80 +121,45 @@ def load_sensor_panel(path=SENSOR_PANEL_PATH, years=EXPOSURE_YEARS):
 
 
 def load_adm2_panel(path=ADM2_PANEL_PATH, years=EXPOSURE_YEARS):
-    """Load the municipality x year panel, restricted to `years` (None keeps all)."""
+    """Load the municipality x year panel, restricted to `years` (None keeps all).
+
+    `has_upstream` is False for headwater municipalities, which have local
+    (`local_*`) but no upstream (`lc_*`/`alr_*`, upstream climate) exposure.
+    """
     frame = pd.read_parquet(path)
+    frame["has_upstream"] = frame["lc_forest"].notna()
     return _restrict_years(frame, years).reset_index(drop=True)
 
 
 # --- Health outcomes ---------------------------------------------------------
-# Health is not yet wired into `adm2_panel` (see the "Deferred" note at the end
-# of setup/assembly_datasets.yaml). Until it is, the helpers below pivot the
-# processed health tables into wide (mun_id, year) frames so the health
-# descriptives can run; they should be replaced by assembly once health is
-# added there.
+# SIH hospitalizations and SINASC births are joined into `adm2_panel` by
+# assembly; these helpers name their column groups from the config.
 
-HOSPITALIZATION_METRICS = ["hospitalizations_count", "in_hospital_deaths_count", "inpatient_days_count"]
+# SIH legacy (<= 2007) and current (>= 2008) series never overlap in a year.
+SIH_LAST_LEGACY_YEAR = 2007
 
 
-def load_hospitalizations(metric="hospitalizations_count", breakdown=None):
-    """Return SIH (residence-based) hospitalizations wide by (mun_id, year).
+def hospitalization_columns(breakdown=None):
+    """Return the `adm2_panel` hospitalization columns for one breakdown.
 
-    `breakdown=None` gives all-cause totals for `HOSPITALIZATION_METRICS`;
-    `"icd10_chapter"` or `"morbidity_channel"` gives one column per category
-    for the single `metric`. A `source_system` column records the SIH legacy
-    (<=2007) vs current (>=2008) series, which overlap in no year.
+    `None` gives the all-cause metrics (`hosp_*_count`), `"icd10_chapter"`
+    the `hosp_icd_*` counts and `"morbidity_channel"` the channel counts.
     """
-    if breakdown is None:
-        path = HEALTH_PROCESSED_DIR / "health_hospitalizations.parquet"
-        frame = pd.read_parquet(path)
-        frame = frame[frame["metric_name"].isin(HOSPITALIZATION_METRICS)]
-        pivot_column = "metric_name"
-        prefix = "hosp_"
-    elif breakdown == "icd10_chapter":
-        path = HEALTH_PROCESSED_DIR / "health_hospitalizations_icd10_chapter.parquet"
-        frame = pd.read_parquet(path, filters=[("metric_name", "==", metric)])
-        pivot_column = "icd10_chapter_code"
-        prefix = "hosp_icd_"
-    elif breakdown == "morbidity_channel":
-        path = HEALTH_PROCESSED_DIR / "health_hospitalizations_selected_morbidity_list.parquet"
-        frame = pd.read_parquet(path, filters=[("metric_name", "==", metric)])
-        pivot_column = "morbidity_channel"
-        prefix = "hosp_"
-    else:
+    sources = {
+        None: "hospitalizations",
+        "icd10_chapter": "hospitalizations_icd10_chapter",
+        "morbidity_channel": "hospitalizations_morbidity_channel",
+    }
+    if breakdown not in sources:
         raise ValueError(f"Unknown breakdown {breakdown!r}.")
-
-    frame = frame.rename(columns={"municipality_code": "mun_id"})
-    wide = frame.pivot_table(
-        index=["mun_id", "year", "source_system"],
-        columns=pivot_column,
-        values="metric_value",
-        aggfunc="sum",
-    )
-    wide.columns = [f"{prefix}{column}" for column in wide.columns]
-    return wide.reset_index()
+    return _assembly_source_variables("adm2_panel", sources[breakdown])
 
 
-def load_births():
-    """Return SINASC births with low-birth-weight and preterm counts by (mun_id, year)."""
-    weight = pd.read_parquet(HEALTH_PROCESSED_DIR / "health_birth_weight.parquet")
-    gestation = pd.read_parquet(HEALTH_PROCESSED_DIR / "health_gestational_duration.parquet")
+def birth_columns():
+    """Return the `adm2_panel` SINASC birth-count columns."""
+    return _assembly_source_variables("adm2_panel", "births")
 
-    low_weight_bins = ["Menos de 500g", "500 a 999g", "1000 a 1499 g", "1500 a 2499 g"]
-    births = weight[["mun_id", "year"]].copy()
-    births["births"] = weight["Total"]
-    births["births_weight_known"] = weight["Total"] - weight["Ignorado"]
-    births["births_low_weight"] = weight[low_weight_bins].sum(axis=1)
 
-    # 28-36 weeks is reported either as one bin or split into 28-31/32-36
-    # depending on the year; summing with min_count=0 covers both layouts.
-    preterm_bins = [
-        "Menos de 22 semanas",
-        "De 22 a 27 semanas",
-        "De 28 a 36 semanas, não especificado",
-        "De 28 a 31 semanas",
-        "De 32 a 36 semanas",
-    ]
-    preterm = gestation[["mun_id", "year"]].copy()
-    preterm["births_gestation_known"] = gestation["Total"] - gestation["Ignorado"]
-    preterm["births_preterm"] = gestation[preterm_bins].sum(axis=1, min_count=0)
-    return births.merge(preterm, on=["mun_id", "year"], how="outer", validate="one_to_one")
+def sih_source_system(year):
+    """Label each year's SIH series: `"legacy"` up to 2007, `"current"` from 2008."""
+    return pd.Series(year).le(SIH_LAST_LEGACY_YEAR).map({True: "legacy", False: "current"}).to_numpy()
