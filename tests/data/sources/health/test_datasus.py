@@ -229,3 +229,41 @@ def test_mortality_age_year_codes_cover_1979_to_2021_with_no_gaps_or_overlap():
     # contiguous 1979-2021 span.
     assert set(pre_1996).isdisjoint(post_1995)
     assert len(pre_1996) + len(post_1995) == (95 - 79 + 1) + (2021 - 1996 + 1)
+
+
+class _FakePartialMorbidityListForm:
+    """A morbidity-list form whose option list loaded only partially."""
+
+    def __init__(self, headless=False, download_dir=None):
+        pass
+
+    def open(self, url):
+        return None
+
+    def select_line(self, value):
+        return None
+
+    def select_column(self, value):
+        return None
+
+    def select_all_content_values(self):
+        return None
+
+    def find_options_by_values(self, select_name, values):
+        return [{"value": value, "text": f"option {value}"} for value in values if value in {"1", "2"}]
+
+    def close(self):
+        return None
+
+
+def test_fetch_selected_morbidity_list_refuses_to_plan_partial_channels(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(datasus_module, "DatasusTabnetForm", _FakePartialMorbidityListForm)
+    monkeypatch.setattr(datasus_module, "_resolve_sih_years", lambda form, years, year_min: [2010])
+
+    with pytest.raises(ValueError, match="missing .* configured values"):
+        datasus_module.fetch_sih_residence_selected_morbidity_list_municipality_year(root_dir=str(tmp_path))
+
+    assert load_manifest(str(tmp_path), "health", datasus_module.SIH_SELECTED_MORBIDITY_LIST_REQUEST_ID) == []
+

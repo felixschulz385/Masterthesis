@@ -789,6 +789,20 @@ def fetch_sih_residence_selected_morbidity_list_municipality_year(
             matched_options_by_source[source_key] = {
                 option["value"]: option["text"] for option in selected_morbidity_lists
             }
+            # Planning with a partial match would silently shrink channels (and drop
+            # those with no match) and record the shrunken batches in the manifest,
+            # as happened when the current-SIH form returned only values 1-2.
+            # Values genuinely absent in one year are handled at execution time.
+            unmatched_values = [
+                value for value in selected_values if value not in matched_options_by_source[source_key]
+            ]
+            if unmatched_values:
+                raise ValueError(
+                    f"DATASUS morbidity-list form for source={source_key} is missing "
+                    f"{len(unmatched_values)} of {len(selected_values)} configured values "
+                    f"(e.g. {unmatched_values[:10]!r}); the form may not have loaded fully. "
+                    "Retry rather than planning partial channels."
+                )
 
         for year in years:
             source_key = _source_key_for_year(year)

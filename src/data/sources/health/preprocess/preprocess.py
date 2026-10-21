@@ -425,19 +425,27 @@ def _write_parquet(frame, output_path, columns):
 
 
 def _complete_panel(frame, category_columns, category_frame, metric_names):
+    """Zero-fill municipalities a fetched table omits (TABNET drops all-zero rows).
+
+    Only (year, source_system, category) cells with at least one fetched row
+    are completed: a batch that was never fetched (e.g. a morbidity channel
+    missing from the manifest) must stay missing rather than become zeros.
+    `category_frame` restricts the categories considered.
+    """
     municipality_frame = (
         frame[["municipality_code", "municipality_name"]]
         .drop_duplicates()
         .sort_values(["municipality_code", "municipality_name"], ignore_index=True)
     )
-    year_source_frame = (
-        frame[["year", "source_system"]]
+    batch_columns = ["year", "source_system", *category_columns]
+    fetched_batches = (
+        frame[batch_columns]
         .drop_duplicates()
-        .sort_values(["year", "source_system"], ignore_index=True)
+        .merge(category_frame, on=list(category_columns), how="inner")
+        .sort_values(batch_columns, ignore_index=True)
     )
     metric_frame = pd.DataFrame({"metric_name": metric_names})
-    complete_index = municipality_frame.merge(year_source_frame, how="cross")
-    complete_index = complete_index.merge(category_frame, how="cross")
+    complete_index = municipality_frame.merge(fetched_batches, how="cross")
     complete_index = complete_index.merge(metric_frame, how="cross")
     completed = complete_index.merge(
         frame,
