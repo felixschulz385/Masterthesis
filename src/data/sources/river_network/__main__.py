@@ -5,6 +5,7 @@ from src.data.sources.gadm.constants import DEFAULT_SIMPLIFIED_GADM_PATH
 
 from .core import RiverNetwork
 from .constants import DEFAULT_RAW_GPKG_PATH, PROCESSED_DIR
+from .otto_basins import write_otto_basin_table
 
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,10 @@ def configure_logging(level: str = "INFO") -> None:
 def configure_parser(parser, include_action=True):
     """Add river-network CLI arguments to ``parser``."""
     if include_action:
-        parser.add_argument("action", choices=["preprocess"])
+        # `otto-basins` (re)builds only `river_network_otto_basins.parquet` from
+        # the raw geopackage's attributes, without rerunning the full network
+        # and matrix pipeline that `preprocess` runs.
+        parser.add_argument("action", choices=["preprocess", "otto-basins"])
     parser.add_argument("--gpkg-path", default=DEFAULT_RAW_GPKG_PATH)
     parser.add_argument("--output-dir", default=PROCESSED_DIR)
     parser.add_argument("--min-lon", type=float)
@@ -39,6 +43,12 @@ def configure_parser(parser, include_action=True):
 
 def run(args):
     """Execute the requested river-network action for parsed ``args``."""
+    # The repo-level CLI builds this parser with include_action=False and only
+    # ever runs preprocess.
+    if getattr(args, "action", "preprocess") == "otto-basins":
+        write_otto_basin_table(args.gpkg_path, args.output_dir)
+        return
+
     bbox = None
     if all(
         v is not None

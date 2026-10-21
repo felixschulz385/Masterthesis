@@ -17,6 +17,9 @@ Saved output files
 `river_network_adm2_dominant_systems.parquet`
     One row per ADM2 region with the dominant river `system_id`, selected by
     maximum summed intersecting trench distance.
+`river_network_otto_basins.parquet`
+    One row per `trench_id` with its Otto Pfafstetter basin codes at levels
+    1-6 (`otto_basin_l1` ... `otto_basin_l6`), see `otto_basins.py`.
 `river_network_system_matrices.pkl`
     Matrix bundle keyed by `system_id`. The row and column ordering metadata
     is not duplicated in the pickle; it is derived from `river_network_trenches.parquet`.
@@ -79,6 +82,7 @@ from .constants import (
     UPSTREAM_NODE_COLUMN,
     UPSTREAM_NODE_INDEX_COLUMN,
 )
+from .otto_basins import write_otto_basin_table
 from src.data.shared.sensor_upstream import sparse_row
 
 
@@ -849,6 +853,7 @@ class RiverNetwork:
         self.build_adm2_dominant_system_table()
 
         self.save(output_dir)
+        write_otto_basin_table(gpkg_path, output_dir, trench_ids=self.trenches[TRENCH_ID_COLUMN])
 
     def save(self, output_dir: str) -> None:
         """

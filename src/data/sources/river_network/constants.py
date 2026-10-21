@@ -10,12 +10,14 @@ DEFAULT_RAW_GPKG_PATH = str(raw_dir(".", "river_network") / "bho_2017_v_01_05_5k
 # than imported from core.py) so verification's raw-artifact check doesn't
 # have to import the whole RiverNetwork class just for this string.
 DEFAULT_RAW_GPKG_TRENCHES_LAYER = "pgh_output.geoft_bho_trecho_drenagem"
+DEFAULT_RAW_GPKG_DRAINAGE_LAYER = "pgh_output.geoft_bho_area_drenagem"
 
 TRENCHES_FILENAME = "river_network_trenches.parquet"
 DRAINAGE_AREAS_FILENAME = "river_network_drainage_areas.parquet"
 SYSTEM_MATRICES_FILENAME = "river_network_system_matrices.pkl"
 TRENCH_ADM2_TABLE_FILENAME = "river_network_trench_adm2_matches.parquet"
 ADM2_DOMINANT_SYSTEM_TABLE_FILENAME = "river_network_adm2_dominant_systems.parquet"
+OTTO_BASINS_FILENAME = "river_network_otto_basins.parquet"
 DEFAULT_ADM2_LAYER = "ADM_ADM_2"
 BRAZIL_PROJECTED_CRS = 5641
 
