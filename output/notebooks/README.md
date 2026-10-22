@@ -16,8 +16,8 @@ Each arm has the same two steps:
    Every section ends with an **→ Informs** note, and the final section is a decision
    table to fill in.
 2. **`02_analysis.ipynb`**: estimation, implementing the decisions from step 1.
-   `pollution/02_analysis` is built on `src/analysis/pollution.py`; `health/02_analysis`
-   is a stub.
+   `pollution/02_analysis` is built on `src/analysis/pollution.py`, `health/02_analysis`
+   on `src/analysis/health.py`.
 
 Re-run a descriptives notebook after any re-assembly, and record changed decisions in
 its table before touching `02_analysis`.
@@ -30,11 +30,16 @@ Other notebooks:
 
 - `src/analysis/panels.py`: panel loaders (restricted to the 1985–2024 exposure window)
   and variable groups derived from `setup/assembly_datasets.yaml`, including the
-  health column groups.
+  health column groups; `ring_land_cover()` recomputes land cover from a subset of the
+  25 km rings (sensor or ADM2).
 - `src/analysis/pollution.py`: the pollution model setup (sample rules, outcome cleaning,
   combined fecal indicator, CONAMA 357 exceedances, land cover recomputed within 200 km
   and per distance band). `build_pollution_panel()` returns the estimation frame.
-- `src/analysis/inference.py`: wild-cluster bootstrap for high-dimensional FE models.
+- `src/analysis/health.py`: the health model setup (window, outcome counts and exposure
+  offsets, upstream land cover within 200 km and per band next to the local block,
+  controls, FE keys). `build_health_panel()` returns the estimation frame.
+- `src/analysis/inference.py`: wild-cluster bootstrap for high-dimensional FE models
+  (OLS), and a wild-cluster score bootstrap for PPML fits.
 - `src/analysis/descriptives.py`: FE demeaning (pyfixest), variation tables, distribution
   tables, binned scatters, effective cluster counts.
 
@@ -48,11 +53,13 @@ and implemented in `pollution/02_analysis.ipynb`, with standard errors clustered
 level-3 sub-basins (below). Coefficients are exported to
 `output/analysis/pollution/coefficients.csv`.
 
-**Health: model setup next.** `adm2_panel` has health outcomes, Otto basins, local and
-upstream exposure (inv-sqrt kernel) and local climate, and keeps headwater municipalities.
-Open data issues (need a DATASUS re-fetch): morbidity channels are broken from 2008 on,
-some birth bins are missing, and there is no mortality data. See
-[`health/README.md`](health/README.md) for the remaining blockers.
+**Health: estimated.** `health/02_analysis` implements the decisions of
+`health/01_descriptives` §9 (`src/analysis/health.py`): PPML with exposure offsets,
+municipality + state×year FE, upstream land cover capped at 200 km next to the local
+block, Otto-3 clustering with a wild-cluster score bootstrap. Upstream land-cover change
+has no detectable effect on hospitalizations, infant deaths or low birth weight, and no
+effect differs from the injury placebo. Coefficients are exported to
+`output/analysis/health/`; see [`health/README.md`](health/README.md).
 
 ## Sub-basins (Otto Pfafstetter)
 

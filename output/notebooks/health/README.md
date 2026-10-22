@@ -1,33 +1,34 @@
 # Health stage: status
 
-**Status (2026-10-21): parked.** Pollution is being finalized first. Health outcomes and
-Otto basins are now in `adm2_panel` (blockers 1 and 8), the ADM2 kernel matches the sensor side (5), and local land cover, local climate and headwater municipalities are in the panel (3, 4, 9), and the descriptives
-notebook runs end to end on it. Estimation is still blocked by the remaining data issues
-below. Resume by working through the checklist, re-assembling `adm2_panel`, and
-re-running `01_descriptives.ipynb`.
+**Status (2026-10-22): estimated.** The decision table in `01_descriptives.ipynb` §9 is
+decided and implemented in `src/analysis/health.py`; `02_analysis.ipynb` runs the
+baseline, the placebo comparison, robustness, distance bands, biome heterogeneity and
+wild-cluster score-bootstrap inference (results in `output/analysis/health/`).
+
+**Main result:** upstream land-cover change has no detectable effect on health in
+downstream municipalities. No upstream pasture or agriculture coefficient is significant
+for any primary outcome, the 95% CIs exclude increases above about 0.6% (pasture) and 1.1%
+(agriculture) per within-municipality SD, and no upstream effect differs from the injury
+placebo. See the summary at the top of `02_analysis.ipynb`.
 
 ## Design
 
 - **Question:** does upstream land-cover change affect health in downstream municipalities?
 - **Unit:** municipality (6-digit IBGE `mun_id`) × year, from `data/assembly/adm2_panel.parquet`.
-- **Window:** 2000–2023. Population (the denominator) starts in 2000; SINASC ends in 2023.
+- **Window:** 2000–2024. Population (the denominator) starts in 2000; land cover ends in 2024.
 - **Candidate outcomes:**
   - SIH hospitalization rates per 1,000 by ICD-10 chapter: 01 infectious/parasitic,
     11 digestive, 14 genitourinary, 16 perinatal, 17 congenital; 19 injury as placebo.
-  - Low-birth-weight share and preterm share (SINASC).
+  - Low-birth-weight share and preterm share (SINASC; preterm only from 2012, see below).
+  - Infant and under-5 mortality per 1,000 live births, all-cause mortality (SIM).
   - All-cause hospitalization and in-hospital death rates.
 - **Exposure:** land cover in 25 km rings upstream of the municipality (`lc_*` / `alr_*`).
 
 ## Blockers
 
-Ordered by priority. All three need a DATASUS re-download, which runs on a local machine
-(scicore has no internet access): see [`health_refetch_handoff.md`](../../../health_refetch_handoff.md).
-
-| # | Issue | Evidence | Fix |
-|---|---|---|---|
-| 2 | Morbidity channels are missing for most channels in 2021–2024, plus pregnancy 2009 and renal 2013 (48 batches) | `scripts/repair_sih_morbidity_manifest.py --dry-run` lists them as `pending` | Resume the fetch locally: `python -m src.data.sources.health fetch --subtype hospitalization` plans only the pending batches |
-| 6 | Some birth tables lose their modal bin in some years | §0: 37–41 weeks missing in 2003, 2006–07, 2009, 2012, 2016–18; 3000–3999 g missing in 2017 | Re-download SINASC (`--subtype birth`; the raw files are not on scicore), then fix the bin-label harmonization in `_clean_birth_outcome_frame`. The derived LBW and preterm shares are unaffected meanwhile |
-| 7 | No mortality data | — | Download SIM deaths by municipality × age band (`--subtype mortality`), then add them to `adm2_panel` (`under_1` gives infant deaths) |
+None open. The DATASUS re-download ran locally (scicore has no internet access) following
+[`health_refetch_handoff.md`](../../../health_refetch_handoff.md); rerun it the same way
+to add new years.
 
 Resolved:
 - **1. Health outcomes in `adm2_panel`.** `adm2_panel` now carries SIH hospitalizations
@@ -44,7 +45,7 @@ Resolved:
   land-cover changes under the two kernels correlate at 0.986 or more. The pollution
   arm's 200 km reach cap is applied in analysis code and is still a health model-setup
   decision.
-- **2. Morbidity channels after 2008 (mostly).** They were (near) zero from 2008 on
+- **2. Morbidity channels after 2008.** They were (near) zero from 2008 on
   because a fetch run whose current-SIH form loaded only morbidity-list values 1–2
   planned gastrointestinal with 2 of its 6 values, silently dropped the other 14
   channels, and rewrote the manifest; preprocessing then zero-filled the unlisted
@@ -55,16 +56,30 @@ Resolved:
   missing (this also turned ICD chapter 99 into NaN in years where it does not exist, and
   filled legacy 1999 injuries and 2001 toxic poisoning, which were zero). Channels are now
   continuous across 2007/2008 (2010/2006 ratios 0.87–1.35, except vector-borne at 2.3,
-  the 2010 dengue epidemic). Caveat: legacy-2000 injuries lists fewer causes than other
-  years.
+  the 2010 dengue epidemic). The 48 batches missing from the old run (most channels
+  2021–2024, pregnancy 2009, renal 2013) were then fetched, so every channel is complete
+  for 1998–2024. Caveat: legacy-2000 injuries lists fewer causes than other years.
+- **6. Birth bins.** The re-downloaded SINASC tables sum to `Total` in every year, so the
+  missing modal bins came from the old download, not from the bin labels; no
+  harmonization was needed. The 28–36 week bin is split into 28–31/32–36 from 2000
+  (partly from 1996), which the preterm count already handles. The preterm share has a real break with the 2011 SINASC form (7% in
+  2010, 12.5% in 2012). 2025–26 are in the processed table but outside the panel window
+  (2026 is partial).
+- **7. Mortality.** SIM deaths by municipality of residence and age band, 1979–2024
+  (ICD-9 to 1995, ICD-10 from 1996), are in `health_mortality.parquet`
+  (`preprocess --subtype mortality`) and in `adm2_panel` as `deaths_total` and
+  `deaths_<age band>` (`panels.mortality_columns()`). 98–99.9% of each year's national
+  deaths fall in an identified municipality, and registered infant mortality falls from
+  21 (2000) to 12 (2015–2024) per 1,000 live births. Municipality-years SIM does not list
+  stay missing: before 2000 these are mostly municipalities not yet created.
 - **3, 4, 9. Local exposure and headwater municipalities.** Bucketed ADM2 sources take
   `scope: local`, which averages (equal weight) the rings of the trenches touching the
   municipality (`bucket_intersects_adm2`) into `local_lc_*`, `local_alr_*` and
   `local_<climate>` columns. The local land-cover source is the panel's spine, so the
   217 headwater municipalities (3.8% of hospitalizations) stay in with NaN upstream
   exposure; `panels.load_adm2_panel()` adds `has_upstream`. Local and upstream land-cover
-  changes 2000–2023 correlate at 0.78–0.86 for forest, pasture and agriculture, and the
-  within-FE ALR terms at 0.19–0.51. Local and upstream climate correlate at 0.79–0.94
+  changes correlate at 0.78–0.86 for forest, pasture and agriculture, and the
+  within-FE ALR terms at 0.20–0.52 (2000–2024). Local and upstream climate correlate at 0.79–0.94
   within municipality. Two coastal municipalities have no local climate.
 - **8. Basin id for clustering.** `adm2_panel` carries `otto_basin_l2` … `otto_basin_l5`,
   the municipality's dominant basin by summed drainage area of its intersecting trenches
@@ -76,13 +91,19 @@ Resolved:
 
 - **Outcomes:**
   - ICD-chapter rates are complete and have few zeros, except congenital (14% zeros)
-    and perinatal (6%).
+    and perinatal (6%). Infant mortality is zero in 22% of municipality-years.
   - Dispersion falls with population, which argues for population weights or PPML with
     population as exposure.
 - **Identifying variation:** after municipality + state×year FE, about 0.4–2% of the
   variance in land-cover shares is left (ALR terms: 0.6–1.9%).
-  - The long differences are substantial, though: 53% of municipalities saw upstream
-    pasture shift by more than 5 percentage points between 2000 and 2023.
+  - The long differences are substantial, though: 55% of municipalities saw upstream
+    pasture shift by more than 5 percentage points between 2000 and 2024.
+- **Placebo:** the raw binscatter suggests injury hospitalizations rise with upstream
+  pasture, but under the proposed specification the placebo is not significant (upstream
+  pasture +0.024, SE 0.029 with the local block, vs +0.040 without it). Its estimates are
+  still as large as any water outcome's.
+- **Reach:** 63% of municipalities have no upstream rings beyond 200 km, so the 200 km cap
+  changes little (capped vs full ALR correlate 0.96–0.99 within municipality).
 - **Inference:** 27 states, effective number about 14. Errors are likely correlated along
   rivers, which state clustering does not capture; Otto-3 basins (217, effective about 39)
   do.

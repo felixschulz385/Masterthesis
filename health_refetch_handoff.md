@@ -1,5 +1,8 @@
 # Handoff: DATASUS health re-download on a local machine
 
+> **Done 2026-10-22.** All three requests below were fetched, synced back and processed.
+> Keep these steps for adding new years: a rerun fetches only what the forms add.
+
 The scicore nodes have no internet access, so the remaining DATASUS TABNET
 downloads (Selenium + Chrome) run locally. The raw files then go back to scicore,
 where preprocessing and assembly run. Everything below is resumable: a rerun
@@ -73,9 +76,3 @@ python -m src.data.sources.health preprocess --subtype all
 python -m src.data.assembly assemble --dataset adm2_panel
 jupyter nbconvert --to notebook --execute output/notebooks/health/01_descriptives.ipynb --inplace
 ```
-
-Still to do once the files are back:
-- Blocker 6: inspect the raw SINASC bin labels for the years that lose their modal
-  bin, and harmonize them in `_clean_birth_outcome_frame`.
-- Blocker 7: add the mortality output (`health_scraping_post_1996.csv`; `under_1`
-  gives infant deaths) to `adm2_panel`.
