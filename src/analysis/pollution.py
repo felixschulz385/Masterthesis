@@ -12,9 +12,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from src.data.sources.land_cover.composition import compute_kernel_weighted_composition
-from src.data.sources.land_cover.constants import LAND_COVER_COMPOSITION_BUCKET_MAP
-
 from . import panels
 
 
@@ -147,35 +144,9 @@ MINING_EXCEEDANCE_OUTCOMES = [
     "total_chromium", "arsenic", "manganese", "dissolved_iron",
 ]
 
-LAND_COVER_SENSOR_BUCKETED_PATH = (
-    panels.PROJECT_ROOT / "data" / "land_cover" / "processed" / "aggregate" / "land_cover_sensor_upstream.parquet"
-)
-
-
 def upstream_land_cover(min_km=0, max_km=MAX_UPSTREAM_KM, years=panels.EXPOSURE_YEARS):
-    """Recompute sensor land-cover composition from the rings in [min_km, max_km).
-
-    Same inv-sqrt kernel and ALR transform as assembly, restricted to a subset
-    of the 25 km rings; weights are renormalized over the rings each station has.
-    """
-    bucket_map = {
-        bucket: spec
-        for bucket, spec in LAND_COVER_COMPOSITION_BUCKET_MAP.items()
-        if min_km <= bucket < max_km
-    }
-    first_year, last_year = years
-    buckets = pd.read_parquet(
-        LAND_COVER_SENSOR_BUCKETED_PATH,
-        filters=[
-            ("bucket", ">=", min_km),
-            ("bucket", "<", max_km),
-            ("year", ">=", first_year),
-            ("year", "<=", last_year),
-        ],
-    )
-    return compute_kernel_weighted_composition(
-        buckets, entity_columns=["station_code", "year"], bucket_map=bucket_map
-    )
+    """Recompute sensor land-cover composition from the rings in [min_km, max_km) (see `panels.ring_land_cover`)."""
+    return panels.ring_land_cover(panels.LAND_COVER_SENSOR_BUCKETED_PATH, "station_code", min_km, max_km, years)
 
 
 def add_near_mining(frame, max_km=MINING_REACH_KM):

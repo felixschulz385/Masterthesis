@@ -10,8 +10,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import yaml
+
+from src.data.sources.land_cover.composition import compute_kernel_weighted_composition
+from src.data.sources.land_cover.constants import LAND_COVER_COMPOSITION_BUCKET_MAP
 
 from .sensor_data.catalog import _classify_pollutant_type
 from .settings import PROJECT_ROOT
@@ -21,6 +25,9 @@ ASSEMBLY_CONFIG_PATH = PROJECT_ROOT / "setup" / "assembly_datasets.yaml"
 SENSOR_PANEL_PATH = PROJECT_ROOT / "data" / "assembly" / "sensor_panel.parquet"
 ADM2_PANEL_PATH = PROJECT_ROOT / "data" / "assembly" / "adm2_panel.parquet"
 HEALTH_PROCESSED_DIR = PROJECT_ROOT / "data" / "health" / "processed"
+LAND_COVER_AGGREGATE_DIR = PROJECT_ROOT / "data" / "land_cover" / "processed" / "aggregate"
+LAND_COVER_SENSOR_BUCKETED_PATH = LAND_COVER_AGGREGATE_DIR / "land_cover_sensor_upstream.parquet"
+LAND_COVER_ADM2_BUCKETED_PATH = LAND_COVER_AGGREGATE_DIR / "land_cover_adm2_upstream.parquet"
 
 # Years covered by both the land-cover (MapBiomas) and climate (ERA5-Land)
 # upstream aggregates; outside this window the exposure/controls are missing.
@@ -129,6 +136,37 @@ def load_adm2_panel(path=ADM2_PANEL_PATH, years=EXPOSURE_YEARS):
     frame = pd.read_parquet(path)
     frame["has_upstream"] = frame["lc_forest"].notna()
     return _restrict_years(frame, years).reset_index(drop=True)
+
+
+def ring_land_cover(path, entity_column, min_km=0, max_km=np.inf, years=EXPOSURE_YEARS):
+    """Recompute land-cover composition from the 25 km rings in [min_km, max_km).
+
+    Same inv-sqrt kernel and ALR transform as assembly, restricted to a subset
+    of the rings of a bucketed land-cover file (`LAND_COVER_*_BUCKETED_PATH`);
+    weights are renormalized over the rings each entity has. ADM2 trench-body
+    rings (negative buckets) are never included, as in assembly's upstream block.
+    """
+    bucket_map = {
+        bucket: spec
+        for bucket, spec in LAND_COVER_COMPOSITION_BUCKET_MAP.items()
+        if min_km <= bucket < max_km
+    }
+    first_year, last_year = years
+    buckets = pd.read_parquet(
+        path,
+        filters=[
+            ("bucket", ">=", max(min_km, 0)),
+            ("bucket", "<", max_km),
+            ("year", ">=", first_year),
+            ("year", "<=", last_year),
+        ],
+    )
+    return compute_kernel_weighted_composition(buckets, entity_columns=[entity_column, "year"], bucket_map=bucket_map)
+
+
+def adm2_upstream_land_cover(min_km=0, max_km=np.inf, years=EXPOSURE_YEARS):
+    """Municipality upstream land cover from the rings in [min_km, max_km) (see `ring_land_cover`)."""
+    return ring_land_cover(LAND_COVER_ADM2_BUCKETED_PATH, "mun_id", min_km, max_km, years)
 
 
 # --- Health outcomes ---------------------------------------------------------
