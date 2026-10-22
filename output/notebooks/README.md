@@ -7,6 +7,9 @@ Upstream land-cover change → river pollution → health, estimated in two link
 | `pollution/` | Does upstream land-cover change degrade water quality? | `data/assembly/sensor_panel.parquet` (`station_code`, `datetime`) | land cover in 25 km rings upstream of the station |
 | `health/` | Does upstream land-cover change affect health downstream? | `data/assembly/adm2_panel.parquet` (`mun_id`, `year`) | land cover in 25 km rings upstream of the municipality |
 
+Each arm has a one-page memo with the model and results:
+[`pollution/memo.md`](pollution/memo.md), [`health/memo.md`](health/memo.md).
+
 ## Workflow
 
 Each arm has the same two steps:
