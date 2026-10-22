@@ -29,6 +29,7 @@ The main directories are:
 - `src/experiments/`: notebooks and exploratory analysis.
 - `data/`: local data products used by the codebase.
 - `output/`: analysis outputs, figures, and documents.
+- `output/notebooks/`: analysis notebooks, split into `pollution/` (sensor panel) and `health/` (ADM2 panel); see `output/notebooks/README.md`.
 - `setup/`: Docker and Slurm/HPC support files.
 - `tests/`: automated tests for the maintained Python components.
 - `submission/`: archived submission-related files.
@@ -192,6 +193,7 @@ Current river-network outputs in `data/river_network/processed/` include:
 
 - `river_network_trenches.parquet`
 - `river_network_drainage_areas.parquet`
+- `river_network_otto_basins.parquet`: Otto Pfafstetter basin codes (levels 1–6) per trench. Rebuild it alone, without the full pipeline, with `python3 -m src.data.sources.river_network otto-basins`.
 
 The expected persisted formats are described in `src/data/output_file_formats.md`.
 

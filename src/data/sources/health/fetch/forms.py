@@ -68,6 +68,14 @@ class DatasusTabnetForm:
 
         raise TimeoutException(f"Unable to open DATASUS form after {self.form_open_retries} attempts: {url}") from last_error
 
+    def _wait_for_document_complete(self, timeout_seconds):
+        # The driver's "eager" page-load strategy hands back control while
+        # TABNET is still streaming the page (readyState "loading"), so long
+        # filter <select>s and result tables are only partially in the DOM.
+        WebDriverWait(self.driver, timeout_seconds).until(
+            lambda driver: driver.execute_script("return document.readyState") == "complete"
+        )
+
     def _wait_for_form_ready(self):
         WebDriverWait(self.driver, self.form_ready_timeout_seconds).until(
             EC.presence_of_element_located((By.XPATH, "//select[@name='Linha']"))
@@ -75,6 +83,7 @@ class DatasusTabnetForm:
         WebDriverWait(self.driver, self.form_ready_timeout_seconds).until(
             EC.presence_of_element_located((By.XPATH, "//select[@name='Incremento']"))
         )
+        self._wait_for_document_complete(self.form_ready_timeout_seconds)
 
     def _wait_for_select_options(self, select_name, minimum_options=1):
         WebDriverWait(self.driver, self.form_ready_timeout_seconds).until(
@@ -137,6 +146,20 @@ class DatasusTabnetForm:
 
     def select_option_value(self, value):
         self._click_option(f"//option[@value='{value}']")
+
+    def select_only_option_value(self, value):
+        """Make `value` the only selected option of its select.
+
+        Clicking a period option (`select_option_value`) toggles it on top of
+        the form's preselected latest period, so a query would sum both years.
+        """
+        select = self.driver.find_element(By.XPATH, f"//option[@value='{value}']/parent::select")
+        self.set_multiselect_values(select.get_attribute("name"), [value], clear_first=True)
+
+    def list_option_values_with_prefix(self, prefix):
+        """Values of every option (any select) whose value starts with `prefix`."""
+        options = self.driver.find_elements(By.XPATH, f"//option[starts-with(@value, '{prefix}')]")
+        return [option.get_attribute("value") for option in options]
 
     def select_options_with_value_fragment(self, fragment, pause_seconds=0.2):
         options = self.driver.find_elements(By.XPATH, f"//option[contains(@value, '{fragment}')]")
@@ -281,15 +304,40 @@ class DatasusTabnetForm:
             or driver.find_elements(By.XPATH, "//h2")
             or driver.find_elements(By.XPATH, "//a[contains(@href, '.csv')]")
         )
+        self._wait_for_document_complete(self.result_wait_seconds)
         message_elements = self.driver.find_elements(By.XPATH, "//h2")
         if message_elements:
             message_text = " ".join(element.text.strip() for element in message_elements if element.text.strip())
             if "Nenhum registro selecionado" in message_text:
                 raise RuntimeError(f"DATASUS returned no selected records: {message_text}")
 
+    def _wait_for_complete_result_text(self):
+        """Return the <pre> result text once its closing "Total" row has arrived.
+
+        TABNET streams the result page, so <pre> exists (and `wait_for_result_page`
+        returns) while the table is still loading; reading it then silently
+        truncates the table.
+        """
+        try:
+            return WebDriverWait(self.driver, self.result_wait_seconds, poll_frequency=1).until(
+                lambda driver: next(
+                    (
+                        text
+                        for text in [driver.find_element(By.XPATH, "//pre").text]
+                        if any(line.split(";", 1)[0].strip('" ') == "Total" for line in text.splitlines())
+                    ),
+                    False,
+                )
+            )
+        except TimeoutException as exc:
+            raise RuntimeError(
+                f"DATASUS result table did not finish loading within {self.result_wait_seconds}s "
+                "(no closing 'Total' row); refusing to save a truncated table."
+            ) from exc
+
     def read_result_table(self):
         self.wait_for_result_page()
-        raw_text = self.driver.find_element(By.XPATH, "//pre").text
+        raw_text = self._wait_for_complete_result_text()
         try:
             return pd.read_csv(io.StringIO(raw_text), sep=";", encoding="latin1")
         except pd.errors.ParserError:

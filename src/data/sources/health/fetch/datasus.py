@@ -1,6 +1,7 @@
 import os
 import logging
 import hashlib
+import re
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -17,6 +18,7 @@ from src.data.shared.batches import update_manifest_entry
 logger = logging.getLogger(__name__)
 DATASUS_NO_SELECTED_RECORDS = "DATASUS returned no selected records"
 
+SINASC_URL = "http://tabnet.datasus.gov.br/cgi/tabcgi.exe?sinasc/cnv/nvbr.def"
 MORTALITY_URLS = {
     "pre_1996": "http://tabnet.datasus.gov.br/cgi/deftohtm.exe?sim/cnv/obt09br.def",
     "post_1995": "http://tabnet.datasus.gov.br/cgi/deftohtm.exe?sim/cnv/obt10br.def",
@@ -463,9 +465,34 @@ def _fetch_year_batch(root_dir, table_name, manifest_entries, batch_id, fetch_ta
         raise
 
 
+def _format_tabnet_number(value):
+    """Render a parsed number back in DATASUS's own notation (no thousands
+    separator, "," as decimal separator), so the preprocess parser -- which
+    strips every "." as a thousands separator -- reads it back unchanged."""
+    if pd.isna(value):
+        return None
+    if float(value).is_integer():
+        return str(int(value))
+    return repr(float(value)).replace(".", ",")
+
+
 def _combine_year_batches(root_dir, table_name, output_path):
     batch_paths = completed_batch_paths(root_dir, HEALTH_DATASET_NAME, table_name)
-    combined = pd.concat([pd.read_parquet(path) for path in batch_paths], ignore_index=True)
+    frames = [pd.read_parquet(path) for path in batch_paths]
+    # A year whose column has no "-" placeholder gets parsed as numeric, while
+    # a year with one stays text, so the same column can differ in dtype across
+    # batches -- which pyarrow can't write as one column. Keep such columns as
+    # text in DATASUS notation.
+    mixed_columns = {
+        column
+        for column in set().union(*(frame.columns for frame in frames))
+        if len({pd.api.types.is_numeric_dtype(frame[column]) for frame in frames if column in frame}) > 1
+    }
+    for frame in frames:
+        for column in mixed_columns & set(frame.columns):
+            if pd.api.types.is_numeric_dtype(frame[column]):
+                frame[column] = frame[column].map(_format_tabnet_number).astype(object)
+    combined = pd.concat(frames, ignore_index=True)
     return _save_raw_table(combined, output_path)
 
 
@@ -624,12 +651,47 @@ def _execute_sih_manifest_entries(
     }
 
 
+def tabnet_year_from_code(code):
+    """Decode a two-digit TABNET file year: SIM starts in 1979, so 79-99 are 19xx."""
+    year = int(code)
+    return 1900 + year if year >= 79 else 2000 + year
+
+
+def _discover_tabnet_year_codes(form, url, file_prefix, fallback_codes, *, min_year=None):
+    """Two-digit year codes of the `<file_prefix><yy>.dbf` period files the form offers.
+
+    Falls back to `fallback_codes` (with a warning) when the form lists none,
+    so a layout change can't silently empty the fetch plan.
+    """
+    pattern = re.compile(rf"^{re.escape(file_prefix)}(\d{{2}})\.dbf$")
+    try:
+        form.open(url)
+        values = form.list_option_values_with_prefix(file_prefix)
+    except Exception as exc:  # noqa: BLE001 -- discovery is best-effort
+        logger.warning("Could not list %s period files at %s (%s); using fallback years.", file_prefix, url, exc)
+        return list(fallback_codes)
+    codes = {match.group(1) for value in values if (match := pattern.match(value))}
+    if min_year is not None:
+        codes = {code for code in codes if tabnet_year_from_code(code) >= min_year}
+    if not codes:
+        logger.warning("No %s period files found at %s; using fallback years.", file_prefix, url)
+        return list(fallback_codes)
+    discovered = sorted(codes, key=tabnet_year_from_code)
+    logger.info(
+        "Discovered %d %s period files at %s (%s-%s)",
+        len(discovered), file_prefix, url,
+        tabnet_year_from_code(discovered[0]), tabnet_year_from_code(discovered[-1]),
+    )
+    return discovered
+
+
 def _mortality_age_year_codes():
     """Year codes (as used in DATASUS's `obtbr<yy>.dbf` filenames) for each
     of the two mortality-by-age source systems, split so every year from
     1979 through 2021 is covered exactly once: the old system (`obt09br.def`,
     `pre_1996`) covers 1979-1995, the new system (`obt10br.def`,
-    `post_1995`) covers 1996-2021."""
+    `post_1995`) covers 1996-2021. `fetch_mortality_age_tables` extends the
+    new system's years with those the form offers; these are the fallback."""
     return {
         "pre_1996": [str(year).zfill(2) for year in range(79, 96)],
         "post_1995": [str(year).zfill(2) for year in list(range(96, 100)) + list(range(0, 22))],
@@ -647,6 +709,13 @@ def fetch_mortality_age_tables(root_dir=".", headless=False, download_dir=None):
     """
     output_dir = _raw_dir(root_dir)
     year_codes = _mortality_age_year_codes()
+    form = DatasusTabnetForm(headless=headless, download_dir=download_dir)
+    try:
+        year_codes["post_1995"] = _discover_tabnet_year_codes(
+            form, MORTALITY_URLS["post_1995"], "obtbr", year_codes["post_1995"], min_year=1996
+        )
+    finally:
+        form.close()
     fetch_plan = {
         "pre_1996": {
             "url": MORTALITY_URLS["pre_1996"],
@@ -672,7 +741,7 @@ def fetch_mortality_age_tables(root_dir=".", headless=False, download_dir=None):
                     def _fetch_year_table(form=form, year=year):
                         form.open(config["url"])
                         form.select_column("Faixa_Etária")
-                        form.select_option_value(f"obtbr{year}.dbf")
+                        form.select_only_option_value(f"obtbr{year}.dbf")
                         form.select_output_format_prn()
                         form.submit_query()
                         table = form.read_result_table()
@@ -789,6 +858,20 @@ def fetch_sih_residence_selected_morbidity_list_municipality_year(
             matched_options_by_source[source_key] = {
                 option["value"]: option["text"] for option in selected_morbidity_lists
             }
+            # Planning with a partial match would silently shrink channels (and drop
+            # those with no match) and record the shrunken batches in the manifest,
+            # as happened when the current-SIH form returned only values 1-2.
+            # Values genuinely absent in one year are handled at execution time.
+            unmatched_values = [
+                value for value in selected_values if value not in matched_options_by_source[source_key]
+            ]
+            if unmatched_values:
+                raise ValueError(
+                    f"DATASUS morbidity-list form for source={source_key} is missing "
+                    f"{len(unmatched_values)} of {len(selected_values)} configured values "
+                    f"(e.g. {unmatched_values[:10]!r}); the form may not have loaded fully. "
+                    "Retry rather than planning partial channels."
+                )
 
         for year in years:
             source_key = _source_key_for_year(year)
@@ -855,8 +938,15 @@ def fetch_birth_outcome_tables(root_dir=".", headless=False, download_dir=None, 
     year.
     """
     output_dir = _raw_dir(root_dir)
-    years = list(range(1994, 2024))
-    latest_year = 2023
+    fallback_codes = [str(year % 100).zfill(2) for year in range(1994, 2024)]
+    form = DatasusTabnetForm(headless=headless, download_dir=download_dir)
+    try:
+        year_codes = _discover_tabnet_year_codes(
+            form, SINASC_URL, "nvbr", fallback_codes, min_year=1994
+        )
+    finally:
+        form.close()
+    years = [tabnet_year_from_code(code) for code in year_codes]
     output_paths = {}
     selected_outcomes = outcome_names or list(BIRTH_COLUMN_OPTIONS)
 
@@ -875,19 +965,11 @@ def fetch_birth_outcome_tables(root_dir=".", headless=False, download_dir=None, 
 
                     def _fetch_year_table(form=form, year=year):
                         logger.info("Fetching %s data for year %s...", outcome_name, year)
-                        form.open("http://tabnet.datasus.gov.br/cgi/tabcgi.exe?sinasc/cnv/nvbr.def")
+                        form.open(SINASC_URL)
                         form.select_column(column_option)
-
-                        year_code = str(year % 100).zfill(2)
-                        latest_year_code = str(latest_year % 100).zfill(2)
-                        # The "Período" multiselect needs at least one value
-                        # selected; for `year == latest_year` the two calls
-                        # used to collapse to nothing (both were gated behind
-                        # `year != latest_year`), leaving the query without
-                        # an explicit period filter.
-                        form.select_option_value(f"nvbr{year_code}.dbf")
-                        if year != latest_year:
-                            form.select_option_value(f"nvbr{latest_year_code}.dbf")
+                        # Select only this year's file: the form preselects the
+                        # latest period, which a plain click would add to.
+                        form.select_only_option_value(f"nvbr{str(year % 100).zfill(2)}.dbf")
 
                         form.select_output_format_prn()
                         form.submit_query()

@@ -14,6 +14,7 @@ from src.data.sources.land_cover.constants import (
     derive_mun_id_from_adm2_id,
 )
 from src.data.shared.sensor_upstream import (
+    BUCKET_INTERSECTS_ADM2_COLUMN,
     DEFAULT_ADM2_DISTANCE_KERNEL,
     DEFAULT_ADM2_KERNEL_BANDWIDTH_KM,
     bucket_kernel_weights,
@@ -25,6 +26,8 @@ from .constants import (
     DATETIME_COLUMN,
     GROUPED_SUM_SOURCE_TYPE,
     LAND_COVER_BUCKETED_SOURCE_TYPE,
+    LOCAL_COLUMN_PREFIX,
+    LOCAL_SCOPE,
     LONG_PIVOT_SOURCE_TYPE,
     SENSOR_MODE,
     YEAR_COLUMN,
@@ -98,6 +101,25 @@ def _compute_kernel_weighted_bucket_values(
     return wide
 
 
+def _local_bucket_map(buckets):
+    """Equal-weight bucket map over the local (ADM2-touching) bucket labels present.
+
+    Paired with a `uniform` kernel of infinite bandwidth, every local ring gets
+    weight 1, renormalized per entity over the rings it has.
+    """
+    return {int(bucket): (f"local_{int(bucket)}", float(bucket)) for bucket in sorted(set(buckets))}
+
+
+def _prefix_local_columns(frame, entity_columns):
+    return frame.rename(
+        columns={
+            column: f"{LOCAL_COLUMN_PREFIX}{column}"
+            for column in frame.columns
+            if column not in entity_columns
+        }
+    )
+
+
 def _pivot_long_source(frame, source):
     """Filter a long table and pivot `pivot_column`'s values into wide columns.
 
@@ -105,7 +127,8 @@ def _pivot_long_source(frame, source):
     both `distance_bucket` and `climate_variable`; `source.filter` narrows to a
     single row per (join_keys, pivot value) (e.g. one distance bucket) before
     the pivot, and `source.value_columns` are the measurement columns pivoted
-    out per value of `pivot_column`, named `{pivot_value}_{value_column}`.
+    out per value of `pivot_column`, named by `source.column_template`
+    (`{pivot_value}_{value_column}` unless the config overrides it).
     """
     for column, value in source.filter.items():
         frame = frame[frame[column] == value]
@@ -135,7 +158,8 @@ def _pivot_long_source(frame, source):
             f"be pivoted; first few duplicated keys:\n{duplicate_keys.head(5)}"
         ) from exc
     wide.columns = [
-        f"{pivot_value}_{value_column}" for value_column, pivot_value in wide.columns
+        source.column_template.format(pivot_value=pivot_value, value_column=value_column)
+        for value_column, pivot_value in wide.columns
     ]
     return wide.reset_index()
 
@@ -161,12 +185,20 @@ def _load_source_frame(source, *, root_dir):
 
     `source.join_keys` names the join columns as they exist in the raw source
     table; `source.id_map` (if set) renames a raw id column (e.g. `adm2_id`) to
-    the canonical column used across sources (e.g. `mun_id`). The returned join
-    keys reflect that renaming so callers can merge on a consistent key set.
+    the canonical column used across sources (e.g. `mun_id`), and
+    `source.rename` renames columns without that id derivation. The returned
+    join keys reflect the renaming so callers can merge on a consistent key set.
     """
     source_path = Path(root_dir) / source.path
     logger.info("Loading assembly source '%s' from %s", source.name, source_path)
-    frame = pd.read_parquet(source_path)
+    read_filters = None
+    if source.type == LONG_PIVOT_SOURCE_TYPE and source.filter:
+        # Push the equality filter into the parquet read: long health tables
+        # (e.g. hospitalizations by ICD chapter) are ~16M rows across metrics.
+        read_filters = [(column, "==", value) for column, value in source.filter.items()]
+    elif source.scope == LOCAL_SCOPE:
+        read_filters = [(BUCKET_INTERSECTS_ADM2_COLUMN, "==", True)]
+    frame = pd.read_parquet(source_path, filters=read_filters)
     index_names = [name for name in frame.index.names if name is not None]
     if index_names:
         # Upstream writers persist their join keys as the parquet row index,
@@ -181,23 +213,34 @@ def _load_source_frame(source, *, root_dir):
 
     if source.type == LAND_COVER_BUCKETED_SOURCE_TYPE:
         kwargs = {"entity_columns": source.join_keys}
+        if source.scope == LOCAL_SCOPE:
+            kwargs.update(kernel="uniform", bandwidth=np.inf, bucket_map=_local_bucket_map(frame["bucket"]))
         if source.kernel is not None:
             kwargs["kernel"] = source.kernel
         if source.bandwidth is not None:
             kwargs["bandwidth"] = source.bandwidth
         frame = compute_kernel_weighted_composition(frame, **kwargs)
     elif source.type == CLIMATE_BUCKETED_SOURCE_TYPE:
+        kwargs = {
+            "kernel": source.kernel or DEFAULT_ADM2_DISTANCE_KERNEL,
+            "bandwidth": (
+                source.bandwidth if source.bandwidth is not None else DEFAULT_ADM2_KERNEL_BANDWIDTH_KM
+            ),
+        }
+        if source.scope == LOCAL_SCOPE:
+            kwargs.update(
+                kernel="uniform", bandwidth=np.inf, bucket_map=_local_bucket_map(frame[DISTANCE_BUCKET_COLUMN])
+            )
         frame = _compute_kernel_weighted_bucket_values(
             frame,
             entity_columns=source.join_keys,
             category_column="climate_variable",
             value_column="mean_value",
-            kernel=source.kernel or DEFAULT_ADM2_DISTANCE_KERNEL,
-            bandwidth=(
-                source.bandwidth if source.bandwidth is not None else DEFAULT_ADM2_KERNEL_BANDWIDTH_KM
-            ),
             bucket_column=DISTANCE_BUCKET_COLUMN,
+            **kwargs,
         )
+    if source.scope == LOCAL_SCOPE:
+        frame = _prefix_local_columns(frame, source.join_keys)
     elif source.type == LONG_PIVOT_SOURCE_TYPE:
         frame = _pivot_long_source(frame, source)
     elif source.type == GROUPED_SUM_SOURCE_TYPE:
@@ -212,6 +255,9 @@ def _load_source_frame(source, *, root_dir):
             frame[datetime_like_column] = pd.to_datetime(frame[datetime_like_column])
 
     canonical_join_keys = list(source.join_keys)
+    if source.rename:
+        frame = frame.rename(columns=source.rename)
+        canonical_join_keys = [source.rename.get(key, key) for key in canonical_join_keys]
     if source.id_map:
         for from_column, to_column in source.id_map.items():
             frame[to_column] = frame[from_column].map(derive_mun_id_from_adm2_id)

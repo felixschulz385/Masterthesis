@@ -65,6 +65,27 @@ Semantics:
 - Derived from `river_network_trench_adm2_matches.parquet` joined against
   `river_network_trenches.parquet`'s `system_id`/`distance` columns.
 
+### `river_network_otto_basins.parquet`
+
+One row per `trench_id` with its Otto Pfafstetter basin codes
+`otto_basin_l1` ... `otto_basin_l6` (strings), read from the BHO drainage-area
+layer's attributes (see `otto_basins.py`).
+
+### `river_network_adm2_otto_basins.parquet`
+
+One row per ADM2 region (`adm2`) with its dominant Otto basin code at each
+level (`otto_basin_l1` ... `otto_basin_l6`, strings).
+
+Semantics:
+
+- Per level, the basin with the largest summed `drainage_area` of the ADM2's
+  intersecting trenches (from `river_network_trench_adm2_matches.parquet`);
+  ties go to the smaller code.
+- Levels are resolved independently, so a coarser code need not prefix a finer
+  one for regions straddling a basin boundary (0.3% of ADM2 at levels 2/3).
+- Written by `write_otto_basin_table()` whenever the trench-ADM2 matches and
+  drainage areas exist in the output directory.
+
 ### `river_network_system_matrices.pkl`
 
 Python pickle storing sparse graph products keyed by `system_id`.

@@ -3,11 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from src.data.sources.health.preprocess.preprocess import (
+    MORTALITY_AGE_COLUMNS,
+    _clean_mortality_age_frame,
     _coerce_tabnet_numeric,
     _preprocess_sih_icd10_chapter_request,
     _read_datasus_csv,
+    build_birth_summary,
 )
 
 
@@ -90,3 +94,73 @@ def test_read_datasus_csv_drops_all_trailing_total_rows(tmp_path: Path):
 
     assert "Total" not in frame.iloc[:, 0].tolist()
     assert len(frame) == 2
+
+
+def test_build_birth_summary_counts_low_weight_and_preterm_across_bin_layouts():
+    birth_weight = pd.DataFrame(
+        {
+            "mun_id": ["123456", "654321"],
+            "year": [2005, 2015],
+            "Menos de 500g": [0.0, 1.0],
+            "500 a 999g": [1.0, 0.0],
+            "1000 a 1499 g": [0.0, 0.0],
+            "1500 a 2499 g": [2.0, 3.0],
+            "2500 a 2999 g": [3.0, 4.0],
+            "3000 a 3999 g": [10.0, 10.0],
+            "4000g e mais": [1.0, 1.0],
+            "Ignorado": [1.0, 0.0],
+            "Total": [18.0, 19.0],
+        }
+    )
+    # Before ~2011 28-36 weeks is one bin; afterwards it is split 28-31/32-36.
+    gestational_duration = pd.DataFrame(
+        {
+            "mun_id": ["123456", "654321"],
+            "year": [2005, 2015],
+            "Menos de 22 semanas": [0.0, 0.0],
+            "De 22 a 27 semanas": [1.0, 0.0],
+            "De 28 a 36 semanas, não especificado": [2.0, None],
+            "De 37 a 41 semanas": [14.0, 15.0],
+            "42 semanas ou mais": [0.0, 0.0],
+            "Ignorado": [1.0, 0.0],
+            "De 28 a 31 semanas": [None, 1.0],
+            "De 32 a 36 semanas": [None, 3.0],
+            "Total": [18.0, 19.0],
+        }
+    )
+
+    summary = build_birth_summary(birth_weight, gestational_duration).set_index("mun_id")
+
+    assert summary.loc["123456", "births_low_weight"] == 3.0
+    assert summary.loc["123456", "births_weight_known"] == 17.0
+    assert summary.loc["123456", "births_preterm"] == 3.0
+    assert summary.loc["654321", "births_preterm"] == 4.0
+    assert summary.loc["654321", "births_gestation_known"] == 19.0
+
+
+def test_clean_mortality_age_frame_keeps_municipality_rows_and_decodes_years():
+    age_columns = [column for column in MORTALITY_AGE_COLUMNS if column != "Total"]
+    rows = [
+        ("96", " 110001 ALTA FLORESTA D'OESTE", ["12", "2"] + ["-"] * 11, 14.0),
+        ("96", " MUNICIPIO IGNORADO - RO", ["9"] + ["-"] * 12, 9.0),
+        ("96", "Total", ["1.021", "2"] + ["-"] * 11, 1023.0),
+        ("01", "110001 ALTA FLORESTA D'OESTE", ["3"] + ["-"] * 12, 3.0),
+    ]
+    frame = pd.DataFrame(
+        [{"year_code": code, "Município": name, **dict(zip(age_columns, ages)), "Total": total} for code, name, ages, total in rows]
+    )
+
+    cleaned = _clean_mortality_age_frame(frame)
+
+    assert cleaned[["mun_id", "year"]].values.tolist() == [["110001", 1996], ["110001", 2001]]
+    assert cleaned["mun_name"].iloc[0] == "ALTA FLORESTA D'OESTE"
+    assert cleaned["deaths_under_1"].tolist() == [12.0, 3.0]
+    assert cleaned["deaths_1_to_4"].tolist() == [2.0, 0.0]
+    assert cleaned["deaths_total"].tolist() == [14.0, 3.0]
+
+
+def test_clean_mortality_age_frame_rejects_missing_age_columns():
+    frame = pd.DataFrame({"year_code": ["96"], "Município": ["110001 X"], "Total": [1.0]})
+
+    with pytest.raises(ValueError, match="Menor 1 ano"):
+        _clean_mortality_age_frame(frame)

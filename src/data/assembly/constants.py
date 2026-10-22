@@ -8,6 +8,15 @@ LAND_COVER_BUCKETED_SOURCE_TYPE = "land_cover_bucketed"
 CLIMATE_BUCKETED_SOURCE_TYPE = "climate_bucketed"
 LONG_PIVOT_SOURCE_TYPE = "long_pivot"
 GROUPED_SUM_SOURCE_TYPE = "grouped_sum"
+DEFAULT_PIVOT_COLUMN_TEMPLATE = "{pivot_value}_{value_column}"
+
+# `land_cover_bucketed`/`climate_bucketed` scope: `upstream` kernel-weights the
+# 0-500 km rings; `local` averages, with equal weight, the rings of the trenches
+# that touch the ADM2 itself (`bucket_intersects_adm2`), prefixing outputs `local_`.
+UPSTREAM_SCOPE = "upstream"
+LOCAL_SCOPE = "local"
+BUCKET_SCOPES = (UPSTREAM_SCOPE, LOCAL_SCOPE)
+LOCAL_COLUMN_PREFIX = "local_"
 WIDE_SOURCE_TYPE = "wide"
 SOURCE_TYPES = (
     WIDE_SOURCE_TYPE,

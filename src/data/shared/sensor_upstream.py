@@ -562,16 +562,17 @@ def assign_distance_buckets(distances, buckets):
 
 DISTANCE_KERNELS = ("uniform", "triangular", "epanechnikov", "gaussian", "exponential")
 
-# Shared default continuous-kernel settings for ADM2 upstream aggregation, so
-# climate and land-cover ADM2 outputs weight upstream distance the same way
-# unless a caller deliberately overrides one of them.
-DEFAULT_ADM2_DISTANCE_KERNEL = "gaussian"
-DEFAULT_ADM2_KERNEL_BANDWIDTH_KM = 1_000_000
-
 # The notebook-derived kernel (weight = 1/sqrt(distance)), kept as an
 # alternative to the continuous DISTANCE_KERNELS for bucketed aggregation.
 INV_SQRT_DISTANCE_KERNEL = "inv_sqrt_distance"
 BUCKET_DISTANCE_KERNELS = (INV_SQRT_DISTANCE_KERNEL, *DISTANCE_KERNELS)
+
+# Shared default kernel for ADM2 upstream aggregation: the same inv-sqrt kernel
+# as sensor land cover, so the health and pollution arms weight upstream
+# distance alike (a Gaussian with a 1,000,000 km bandwidth was effectively flat).
+# The inv-sqrt kernel takes no bandwidth.
+DEFAULT_ADM2_DISTANCE_KERNEL = INV_SQRT_DISTANCE_KERNEL
+DEFAULT_ADM2_KERNEL_BANDWIDTH_KM = None
 
 # Both land-cover and climate ADM2 aggregation flag, per discrete upstream
 # distance bucket, whether any trench in that bucket directly intersects the

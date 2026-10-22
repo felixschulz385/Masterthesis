@@ -13,7 +13,13 @@
 # `type: long_pivot` marks sources long over a category column (e.g.
 # climate's `climate_variable` x `distance_bucket`); `filter` narrows to one
 # row per (join_keys, category value) and `pivot_column`/`value_columns`
-# pivot the category's values into `{category_value}_{value_column}` columns.
+# pivot the category's values into `{category_value}_{value_column}` columns
+# (or `column_template`, formatted with `pivot_value`/`value_column`).
+# `rename` renames raw columns (including join keys) without the id
+# derivation `id_map` applies.
+# `scope: local` (bucketed ADM2 sources only) averages the rings of the trenches
+# touching the ADM2 instead of kernel-weighting the 0-500 km upstream rings, and
+# prefixes the outputs `local_`.
 # `type: grouped_sum` marks sources long over some other non-join-key
 # dimension (e.g. population's `sex`/`age_group`); `variables` are summed
 # across that dimension, collapsing to one row per `join_keys` before the
@@ -187,6 +193,19 @@ datasets:
         # stays a clean integer/categorical grouping key (e.g. for
         # basin-level clustering in regressions).
         categorical_variables: [system_id]
+      - name: otto_basins
+        path: data/river_network/processed/river_network_otto_basins.parquet
+        join_keys: [trench_id]
+        variables:
+          - otto_basin_l2
+          - otto_basin_l3
+          - otto_basin_l4
+          - otto_basin_l5
+        # Nested Otto Pfafstetter sub-basin codes of the station's trench (see
+        # src.data.sources.river_network.otto_basins) -- the clustering unit for
+        # inference, since system_id is dominated by one huge connected system.
+        # String codes, not measurements: exclude from numeric-dtype enforcement.
+        categorical_variables: [otto_basin_l2, otto_basin_l3, otto_basin_l4, otto_basin_l5]
       - name: land_cover_sensor_upstream
         path: data/land_cover/processed/aggregate/land_cover_sensor_upstream.parquet
         type: land_cover_bucketed
@@ -298,16 +317,41 @@ datasets:
     sources:
       # Both land-cover and climate ADM2 sources are long over discrete 25km
       # upstream distance buckets (produced by aggregate_along_rivers /
-      # _assemble_adm2_upstream_duckdb respectively); `kernel`/`bandwidth`
-      # collapse them into per-entity values the same way -- explicit here so
-      # both weight distance identically, matching
-      # shared.DEFAULT_ADM2_DISTANCE_KERNEL/DEFAULT_ADM2_KERNEL_BANDWIDTH_KM.
+      # _assemble_adm2_upstream_duckdb respectively); `kernel` collapses them
+      # into per-entity values the same way -- explicit here so both weight
+      # distance identically and match the sensor side's inv-sqrt kernel
+      # (shared.DEFAULT_ADM2_DISTANCE_KERNEL).
+      # Local land cover: the rings of the trenches that touch the municipality
+      # (`bucket_intersects_adm2`), equally weighted. Every matched municipality
+      # has them, so this first source is the panel's spine -- headwater
+      # municipalities with no upstream rings stay in, with NaN upstream exposure.
+      - name: land_cover_adm2_local
+        path: data/land_cover/processed/aggregate/land_cover_adm2_upstream.parquet
+        type: land_cover_bucketed
+        scope: local
+        join_keys: [mun_id, year]
+        variables:
+          - local_lc_forest
+          - local_lc_nonforest_nat
+          - local_lc_pasture
+          - local_lc_agriculture
+          - local_lc_farming_unclassified
+          - local_lc_urban
+          - local_lc_mining
+          - local_lc_other
+          - local_lc_water
+          - local_lc_nat
+          - local_alr_pasture
+          - local_alr_agriculture
+          - local_alr_farming_unclassified
+          - local_alr_urban
+          - local_alr_mining
+          - local_alr_other
       - name: land_cover_adm2_upstream
         path: data/land_cover/processed/aggregate/land_cover_adm2_upstream.parquet
         type: land_cover_bucketed
         join_keys: [mun_id, year]
-        kernel: gaussian
-        bandwidth: 1000000
+        kernel: inv_sqrt_distance
         variables:
           - lc_forest
           - lc_nonforest_nat
@@ -330,8 +374,7 @@ datasets:
         type: climate_bucketed
         join_keys: [adm2_id, year]
         id_map: {adm2_id: mun_id}
-        kernel: gaussian
-        bandwidth: 1000000
+        kernel: inv_sqrt_distance
         # Raw ERA5-Land variable codes referenced by
         # src/data/sources/climate/schema.py's ANNUAL_* aggregation-rule sets; confirm
         # against the actual `climate_variable` values in
@@ -347,6 +390,25 @@ datasets:
           - swvl2
           - 2t_daily_min
           - 2t_daily_max
+      # Local climate: the same ADM2-touching rings as local land cover -- the
+      # municipality's own catchment, a direct confounder for health.
+      - name: climate_adm2_local_yearly
+        path: data/climate/processed/aggregate/climate_adm2_upstream_yearly.parquet
+        type: climate_bucketed
+        scope: local
+        join_keys: [adm2_id, year]
+        id_map: {adm2_id: mun_id}
+        variables:
+          - local_2t
+          - local_2d
+          - local_tp
+          - local_sro
+          - local_ssro
+          - local_pev
+          - local_swvl1
+          - local_swvl2
+          - local_2t_daily_min
+          - local_2t_daily_max
       - name: population
         path: data/population/processed/population.parquet
         # population.parquet is long over sex/age_group (one row per
@@ -368,8 +430,124 @@ datasets:
         # A municipality's dominant biome is a fixed label by intersecting
         # area, not a measurement -- exclude it from numeric-dtype enforcement.
         categorical_variables: [biome]
-
-# Deferred: health outputs (data/health/processed/health_hospitalizations.parquet and related
-# tables) are long `metric_name`/`metric_value` tables rather than one wide
-# table per municipality-year, so wiring them in needs pivot support that
-# this config format does not yet have.
+      - name: otto_basins_adm2
+        path: data/river_network/processed/river_network_adm2_otto_basins.parquet
+        join_keys: [adm2]
+        id_map: {adm2: mun_id}
+        variables:
+          - otto_basin_l2
+          - otto_basin_l3
+          - otto_basin_l4
+          - otto_basin_l5
+        # Dominant Otto Pfafstetter sub-basin per municipality, by summed
+        # drainage area of its intersecting trenches (see
+        # src.data.sources.river_network.otto_basins) -- the clustering unit,
+        # as on the sensor side. String codes: exclude from numeric enforcement.
+        categorical_variables: [otto_basin_l2, otto_basin_l3, otto_basin_l4, otto_basin_l5]
+      # SIH hospitalizations by municipality of residence. The processed tables
+      # are long over `metric_name` (and a category); SIH's `municipality_code`
+      # is already the 6-digit `mun_id`, so it is renamed rather than id-mapped.
+      # Legacy (<= 2007) and current (>= 2008) SIH series never overlap in a year.
+      - name: hospitalizations
+        path: data/health/processed/health_hospitalizations.parquet
+        type: long_pivot
+        join_keys: [municipality_code, year]
+        rename: {municipality_code: mun_id}
+        pivot_column: metric_name
+        value_columns: [metric_value]
+        column_template: "hosp_{pivot_value}"
+        variables:
+          - hosp_hospitalizations_count
+          - hosp_in_hospital_deaths_count
+          - hosp_inpatient_days_count
+      - name: hospitalizations_icd10_chapter
+        path: data/health/processed/health_hospitalizations_icd10_chapter.parquet
+        type: long_pivot
+        join_keys: [municipality_code, year]
+        rename: {municipality_code: mun_id}
+        filter: {metric_name: hospitalizations_count}
+        pivot_column: icd10_chapter_code
+        value_columns: [metric_value]
+        column_template: "hosp_icd_{pivot_value}"
+        variables:
+          - hosp_icd_01
+          - hosp_icd_02
+          - hosp_icd_03
+          - hosp_icd_04
+          - hosp_icd_05
+          - hosp_icd_06
+          - hosp_icd_07
+          - hosp_icd_08
+          - hosp_icd_09
+          - hosp_icd_10
+          - hosp_icd_11
+          - hosp_icd_12
+          - hosp_icd_13
+          - hosp_icd_14
+          - hosp_icd_15
+          - hosp_icd_16
+          - hosp_icd_17
+          - hosp_icd_18
+          - hosp_icd_19
+          - hosp_icd_20
+          - hosp_icd_21
+          - hosp_icd_99
+      # Morbidity channels are (near) zero from 2008 on (a preprocessing bug in
+      # the current-SIH morbidity-list mapping); usable for 1998-2007 only.
+      - name: hospitalizations_morbidity_channel
+        path: data/health/processed/health_hospitalizations_selected_morbidity_list.parquet
+        type: long_pivot
+        join_keys: [municipality_code, year]
+        rename: {municipality_code: mun_id}
+        filter: {metric_name: hospitalizations_count}
+        pivot_column: morbidity_channel
+        value_columns: [metric_value]
+        column_template: "hosp_{pivot_value}"
+        variables:
+          - hosp_cardiovascular_pollution_sensitive
+          - hosp_congenital_anomalies
+          - hosp_injuries_accidents_occupational
+          - hosp_leptospirosis_water_exposure
+          - hosp_mental_health_substance_use
+          - hosp_perinatal_newborn
+          - hosp_pregnancy_maternal
+          - hosp_renal_urinary_toxic_water
+          - hosp_respiratory_air_dust
+          - hosp_skin_contact
+          - hosp_symptoms_unspecific
+          - hosp_toxic_poisoning
+          - hosp_vector_borne_ecological
+          - hosp_violence_self_harm
+          - hosp_water_sanitation_gastrointestinal
+      # SINASC births with low-birth-weight (< 2500 g) and preterm (< 37 weeks)
+      # counts; `*_known` exclude "Ignorado" and are the share denominators.
+      - name: births
+        path: data/health/processed/health_births.parquet
+        join_keys: [mun_id, year]
+        variables:
+          - births
+          - births_weight_known
+          - births_low_weight
+          - births_gestation_known
+          - births_preterm
+      # SIM deaths by municipality of residence and age band. ICD-9 (<= 1995) and
+      # ICD-10 (>= 1996) series never overlap in a year; a municipality-year SIM
+      # does not list (mostly: municipality not yet created) stays missing.
+      - name: mortality
+        path: data/health/processed/health_mortality.parquet
+        join_keys: [mun_id, year]
+        variables:
+          - deaths_total
+          - deaths_under_1
+          - deaths_1_to_4
+          - deaths_5_to_9
+          - deaths_10_to_14
+          - deaths_15_to_19
+          - deaths_20_to_29
+          - deaths_30_to_39
+          - deaths_40_to_49
+          - deaths_50_to_59
+          - deaths_60_to_69
+          - deaths_70_to_79
+          - deaths_80_and_more
+          - deaths_age_unknown

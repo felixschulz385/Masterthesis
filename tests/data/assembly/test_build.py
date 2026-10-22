@@ -16,6 +16,7 @@ from src.data.assembly.constants import (
     CLIMATE_BUCKETED_SOURCE_TYPE,
     GROUPED_SUM_SOURCE_TYPE,
     LAND_COVER_BUCKETED_SOURCE_TYPE,
+    LOCAL_SCOPE,
     LONG_PIVOT_SOURCE_TYPE,
     SENSOR_MODE,
 )
@@ -432,3 +433,118 @@ def test_pivot_long_source_does_not_blame_duplicates_for_unrelated_pivot_error(
     with pytest.raises(ValueError, match="climate.*failed to pivot.*unrelated pivot failure") as exc_info:
         _pivot_long_source(frame, source)
     assert "duplicate" not in str(exc_info.value)
+
+
+def test_assemble_dataset_adm2_mode_pivots_filtered_long_health_source_with_template(tmp_path):
+    population = pd.DataFrame({"mun_id": ["123456"], "year": [2019], "population": [1000.0]})
+    population.to_parquet(tmp_path / "population.parquet", index=False)
+
+    # SIH-like table: long over metric x ICD chapter, keyed by an already
+    # 6-digit `municipality_code` that must be renamed, not id-mapped.
+    hospitalizations = pd.DataFrame(
+        {
+            "municipality_code": ["123456"] * 4,
+            "year": [2019] * 4,
+            "icd10_chapter_code": ["01", "11", "01", "11"],
+            "metric_name": ["hospitalizations_count"] * 2 + ["in_hospital_deaths_count"] * 2,
+            "metric_value": [10.0, 20.0, 1.0, 2.0],
+        }
+    )
+    hospitalizations.to_parquet(tmp_path / "hosp.parquet", index=False)
+
+    dataset_config = AssemblyDataset(
+        id="adm2_panel",
+        mode=ADM2_MODE,
+        index=("mun_id", "year"),
+        output_path=str(tmp_path / "out.parquet"),
+        sources=(
+            AssemblySource(
+                name="population",
+                path="population.parquet",
+                join_keys=("mun_id", "year"),
+                variables=("population",),
+            ),
+            AssemblySource(
+                name="hospitalizations_icd10_chapter",
+                path="hosp.parquet",
+                join_keys=("municipality_code", "year"),
+                variables=("hosp_icd_01", "hosp_icd_11"),
+                type=LONG_PIVOT_SOURCE_TYPE,
+                rename={"municipality_code": "mun_id"},
+                filter={"metric_name": "hospitalizations_count"},
+                pivot_column="icd10_chapter_code",
+                value_columns=("metric_value",),
+                column_template="hosp_icd_{pivot_value}",
+            ),
+        ),
+    )
+
+    result = assemble_dataset(dataset_config, root_dir=tmp_path)
+
+    assert result["mun_id"].tolist() == ["123456"]
+    assert result["hosp_icd_01"].tolist() == [10.0]
+    assert result["hosp_icd_11"].tolist() == [20.0]
+
+
+def test_assemble_dataset_adm2_mode_local_scope_averages_adm2_touching_buckets(tmp_path):
+    # Municipality 1 has a local ring (-25, flagged) and an upstream ring (0);
+    # municipality 2 is a headwater municipality with local rings only.
+    rows = []
+    for mun_id, bucket, forest, flagged in [
+        ("111111", -25, 0.8, True),
+        ("111111", 0, 0.2, False),
+        ("222222", -50, 0.4, True),
+        ("222222", -25, 0.6, True),
+    ]:
+        rows += [
+            {"mun_id": mun_id, "year": 2019, "bucket": bucket, "land_cover_class": 1, "share": forest,
+             "bucket_intersects_adm2": flagged},
+            {"mun_id": mun_id, "year": 2019, "bucket": bucket, "land_cover_class": 30, "share": 1 - forest,
+             "bucket_intersects_adm2": flagged},
+        ]
+    pd.DataFrame(rows).to_parquet(tmp_path / "land_cover_adm2.parquet", index=False)
+    climate = pd.DataFrame(
+        {
+            "adm2_id": ["1111117", "1111117", "2222227", "2222227"],
+            "year": [2019] * 4,
+            "distance_bucket": [-25, 0, -50, -25],
+            "climate_variable": ["2t"] * 4,
+            "mean_value": [20.0, 30.0, 10.0, 14.0],
+            "bucket_intersects_adm2": [True, False, True, True],
+        }
+    )
+    climate.to_parquet(tmp_path / "climate_adm2.parquet", index=False)
+
+    land_cover_source = dict(
+        path="land_cover_adm2.parquet",
+        join_keys=("mun_id", "year"),
+        type=LAND_COVER_BUCKETED_SOURCE_TYPE,
+    )
+    dataset_config = AssemblyDataset(
+        id="adm2_panel",
+        mode=ADM2_MODE,
+        index=("mun_id", "year"),
+        output_path=str(tmp_path / "out.parquet"),
+        sources=(
+            AssemblySource(name="lc_local", variables=("local_lc_forest",), scope=LOCAL_SCOPE, **land_cover_source),
+            AssemblySource(name="lc_upstream", variables=("lc_forest",), **land_cover_source),
+            AssemblySource(
+                name="climate_local",
+                path="climate_adm2.parquet",
+                join_keys=("adm2_id", "year"),
+                variables=("local_2t",),
+                type=CLIMATE_BUCKETED_SOURCE_TYPE,
+                id_map={"adm2_id": "mun_id"},
+                scope=LOCAL_SCOPE,
+            ),
+        ),
+    )
+
+    result = assemble_dataset(dataset_config, root_dir=tmp_path).set_index("mun_id")
+
+    # The headwater municipality stays in the panel, with no upstream exposure.
+    assert result.index.tolist() == ["111111", "222222"]
+    assert result["local_lc_forest"].tolist() == pytest.approx([0.8, 0.5], abs=1e-3)
+    assert result.loc["111111", "lc_forest"] == pytest.approx(0.2, abs=1e-3)
+    assert np.isnan(result.loc["222222", "lc_forest"])
+    assert result["local_2t"].tolist() == pytest.approx([20.0, 12.0])

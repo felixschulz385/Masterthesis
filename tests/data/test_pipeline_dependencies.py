@@ -209,13 +209,12 @@ def test_assembly_prerequisites_missing_config_yields_no_prerequisites(tmp_path)
     assert assembly_prerequisites(root_dir=tmp_path) == StagePrerequisites()
 
 
-def test_assembly_prerequisites_against_real_config_excludes_health():
-    """Regression-locks today's actual setup/assembly_datasets.yaml: health
-    isn't wired into any dataset's source paths yet (per its own "Deferred"
-    comment), so it must not show up as an assembly prerequisite."""
+def test_assembly_prerequisites_against_real_config_includes_health():
+    """Regression-locks today's actual setup/assembly_datasets.yaml: adm2_panel
+    reads the processed health tables, so health is an assembly prerequisite."""
     prereqs = assembly_prerequisites(root_dir=".")
 
-    assert "health" not in prereqs.requires_preprocessed
+    assert "health" in prereqs.requires_preprocessed
     assert "river_network" in prereqs.requires_preprocessed
     assert "sensor_data" in prereqs.requires_preprocessed
 

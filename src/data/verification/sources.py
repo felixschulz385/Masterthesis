@@ -243,12 +243,15 @@ def _river_network_list_fetched(root_dir, force: bool = False) -> FetchListing:
 def _river_network_check_outputs(root_dir) -> list[OutputArtifactCheck]:
     from src.data.sources.river_network.constants import (
         ADM2_DOMINANT_SYSTEM_TABLE_FILENAME,
+        ADM2_OTTO_BASINS_FILENAME,
         DRAINAGE_AREAS_FILENAME,
+        OTTO_BASINS_FILENAME,
         PROCESSED_DIR,
         TRENCHES_FILENAME,
         TRENCH_ADM2_TABLE_FILENAME,
         TRENCH_ID_COLUMN,
     )
+    from src.data.sources.river_network.otto_basins import OTTO_BASIN_COLUMNS
 
     river_dir = Path(root_dir) / PROCESSED_DIR
     return [
@@ -281,6 +284,24 @@ def _river_network_check_outputs(root_dir) -> list[OutputArtifactCheck]:
             ],
         ),
         _artifact_check(
+            "otto_basins",
+            river_dir / OTTO_BASINS_FILENAME,
+            lambda frame: [
+                check_required_columns(frame, [TRENCH_ID_COLUMN, *OTTO_BASIN_COLUMNS]),
+                _non_empty_check(frame),
+                _uniqueness_check(frame, TRENCH_ID_COLUMN),
+            ],
+        ),
+        _artifact_check(
+            "adm2_otto_basins",
+            river_dir / ADM2_OTTO_BASINS_FILENAME,
+            lambda frame: [
+                check_required_columns(frame, ["adm2", *OTTO_BASIN_COLUMNS]),
+                _non_empty_check(frame),
+                _uniqueness_check(frame, "adm2"),
+            ],
+        ),
+        _artifact_check(
             "adm2_dominant_systems",
             river_dir / ADM2_DOMINANT_SYSTEM_TABLE_FILENAME,
             lambda frame: [
@@ -308,8 +329,10 @@ def _river_network_check_fetched(root_dir) -> list[OutputArtifactCheck]:
 def _river_network_fingerprint_paths(root_dir) -> list[Path]:
     from src.data.sources.river_network.constants import (
         ADM2_DOMINANT_SYSTEM_TABLE_FILENAME,
+        ADM2_OTTO_BASINS_FILENAME,
         DEFAULT_RAW_GPKG_PATH,
         DRAINAGE_AREAS_FILENAME,
+        OTTO_BASINS_FILENAME,
         PROCESSED_DIR,
         TRENCHES_FILENAME,
         TRENCH_ADM2_TABLE_FILENAME,
@@ -322,6 +345,8 @@ def _river_network_fingerprint_paths(root_dir) -> list[Path]:
         river_dir / DRAINAGE_AREAS_FILENAME,
         river_dir / TRENCH_ADM2_TABLE_FILENAME,
         river_dir / ADM2_DOMINANT_SYSTEM_TABLE_FILENAME,
+        river_dir / OTTO_BASINS_FILENAME,
+        river_dir / ADM2_OTTO_BASINS_FILENAME,
     ]
 
 
@@ -1005,7 +1030,7 @@ def _population_fingerprint_paths(root_dir) -> list[Path]:
 # --------------------------------------------------------------------------
 
 # The batch-manifest based SIH tables (see src/data/sources/health/fetch/datasus.py);
-# mortality tables use a simpler non-manifest scrape and aren't counted here.
+# the SINASC and SIM per-year manifests aren't counted here.
 _HEALTH_KNOWN_BATCH_TABLES = (
     "SIH_RESIDENCE_TOTAL_MUNICIPALITY_YEAR",
     "SIH_RESIDENCE_ICD10_CHAPTER_MUNICIPALITY_YEAR",
@@ -1018,6 +1043,8 @@ def _health_output_files() -> tuple[str, ...]:
         HOSPITALIZATIONS_FILENAME,
         HOSPITALIZATIONS_ICD10_CHAPTER_FILENAME,
         HOSPITALIZATIONS_SELECTED_MORBIDITY_LIST_FILENAME,
+        BIRTHS_FILENAME,
+        MORTALITY_FILENAME,
         birth_outcome_filename,
     )
 
@@ -1027,6 +1054,8 @@ def _health_output_files() -> tuple[str, ...]:
         HOSPITALIZATIONS_SELECTED_MORBIDITY_LIST_FILENAME,
         birth_outcome_filename("birth_weight"),
         birth_outcome_filename("gestational_duration"),
+        BIRTHS_FILENAME,
+        MORTALITY_FILENAME,
     )
 
 
@@ -1034,6 +1063,18 @@ def _health_birth_outcome_files() -> set[str]:
     from src.data.sources.health.constants import birth_outcome_filename
 
     return {birth_outcome_filename("birth_weight"), birth_outcome_filename("gestational_duration")}
+
+
+def _health_births_summary_file() -> str:
+    from src.data.sources.health.constants import BIRTHS_FILENAME
+
+    return BIRTHS_FILENAME
+
+
+def _health_mortality_file() -> str:
+    from src.data.sources.health.constants import MORTALITY_FILENAME
+
+    return MORTALITY_FILENAME
 
 
 _HEALTH_OUTPUT_FILES = _health_output_files()
@@ -1046,6 +1087,20 @@ _HEALTH_HOSPITALIZATION_REQUIRED_COLUMNS = ["municipality_code", "year", "metric
 # per-category count columns, and a "Total" column -- all non-negative counts.
 _HEALTH_BIRTH_OUTCOME_FILES = _health_birth_outcome_files()
 _HEALTH_BIRTH_OUTCOME_REQUIRED_COLUMNS = ["mun_id", "year", "Total"]
+# The derived births summary (write_birth_summary_table) is wide by (mun_id, year).
+_HEALTH_BIRTHS_SUMMARY_FILE = _health_births_summary_file()
+_HEALTH_BIRTHS_SUMMARY_REQUIRED_COLUMNS = [
+    "mun_id",
+    "year",
+    "births",
+    "births_weight_known",
+    "births_low_weight",
+    "births_gestation_known",
+    "births_preterm",
+]
+# SIM deaths (preprocess_mortality_age_tables), wide by (mun_id, year).
+_HEALTH_MORTALITY_FILE = _health_mortality_file()
+_HEALTH_MORTALITY_REQUIRED_COLUMNS = ["mun_id", "year", "source_system", "deaths_total", "deaths_under_1"]
 
 
 def _health_list_fetched(root_dir, force: bool = False) -> FetchListing:
@@ -1074,7 +1129,15 @@ def _health_list_fetched(root_dir, force: bool = False) -> FetchListing:
 def _health_check_outputs(root_dir) -> list[OutputArtifactCheck]:
     def build_checks(frame, filename):
         checks = [_non_empty_check(frame)]
-        if filename in _HEALTH_BIRTH_OUTCOME_FILES:
+        if filename == _HEALTH_BIRTHS_SUMMARY_FILE:
+            checks.append(check_required_columns(frame, _HEALTH_BIRTHS_SUMMARY_REQUIRED_COLUMNS))
+        elif filename == _HEALTH_MORTALITY_FILE:
+            checks.append(check_required_columns(frame, _HEALTH_MORTALITY_REQUIRED_COLUMNS))
+            if "deaths_total" in frame.columns:
+                checks.append(
+                    check_value_range(frame, "deaths_total", lo=0.0, hi=float("inf"), name="value_range:deaths_total")
+                )
+        elif filename in _HEALTH_BIRTH_OUTCOME_FILES:
             checks.append(check_required_columns(frame, _HEALTH_BIRTH_OUTCOME_REQUIRED_COLUMNS))
             if "Total" in frame.columns:
                 checks.append(

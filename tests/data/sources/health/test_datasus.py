@@ -36,8 +36,11 @@ class _FakeYearLoopForm:
     def select_column(self, value):
         return None
 
-    def select_option_value(self, value):
+    def select_only_option_value(self, value):
         return None
+
+    def list_option_values_with_prefix(self, prefix):
+        return []
 
     def select_output_format_prn(self):
         return None
@@ -141,8 +144,11 @@ class _FakeYearLoopFormFailingOnce:
     def select_column(self, value):
         return None
 
-    def select_option_value(self, value):
+    def select_only_option_value(self, value):
         self._last_value = value
+
+    def list_option_values_with_prefix(self, prefix):
+        return []
 
     def select_output_format_prn(self):
         return None
@@ -229,3 +235,69 @@ def test_mortality_age_year_codes_cover_1979_to_2021_with_no_gaps_or_overlap():
     # contiguous 1979-2021 span.
     assert set(pre_1996).isdisjoint(post_1995)
     assert len(pre_1996) + len(post_1995) == (95 - 79 + 1) + (2021 - 1996 + 1)
+
+
+class _FakePartialMorbidityListForm:
+    """A morbidity-list form whose option list loaded only partially."""
+
+    def __init__(self, headless=False, download_dir=None):
+        pass
+
+    def open(self, url):
+        return None
+
+    def select_line(self, value):
+        return None
+
+    def select_column(self, value):
+        return None
+
+    def select_all_content_values(self):
+        return None
+
+    def find_options_by_values(self, select_name, values):
+        return [{"value": value, "text": f"option {value}"} for value in values if value in {"1", "2"}]
+
+    def close(self):
+        return None
+
+
+def test_fetch_selected_morbidity_list_refuses_to_plan_partial_channels(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(datasus_module, "DatasusTabnetForm", _FakePartialMorbidityListForm)
+    monkeypatch.setattr(datasus_module, "_resolve_sih_years", lambda form, years, year_min: [2010])
+
+    with pytest.raises(ValueError, match="missing .* configured values"):
+        datasus_module.fetch_sih_residence_selected_morbidity_list_municipality_year(root_dir=str(tmp_path))
+
+    assert load_manifest(str(tmp_path), "health", datasus_module.SIH_SELECTED_MORBIDITY_LIST_REQUEST_ID) == []
+
+
+class _FakePeriodListForm:
+    def __init__(self, values):
+        self.values = values
+
+    def open(self, url):
+        return None
+
+    def list_option_values_with_prefix(self, prefix):
+        return [value for value in self.values if value.startswith(prefix)]
+
+
+def test_discover_tabnet_year_codes_orders_across_the_century_and_applies_min_year():
+    form = _FakePeriodListForm(["obtbr23.dbf", "obtbr96.dbf", "obtbr00.dbf", "obtbr95.dbf", "other.dbf"])
+
+    codes = datasus_module._discover_tabnet_year_codes(form, "url", "obtbr", ["96"], min_year=1996)
+
+    assert codes == ["96", "00", "23"]
+
+
+def test_discover_tabnet_year_codes_falls_back_when_form_lists_none():
+    codes = datasus_module._discover_tabnet_year_codes(_FakePeriodListForm([]), "url", "nvbr", ["94", "95"])
+
+    assert codes == ["94", "95"]
+
+
+def test_tabnet_year_from_code_pivots_at_1979():
+    assert [datasus_module.tabnet_year_from_code(code) for code in ["79", "99", "00", "23"]] == [1979, 1999, 2000, 2023]

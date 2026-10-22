@@ -6,7 +6,16 @@ from pathlib import Path
 
 import yaml
 
-from .constants import ASSEMBLY_MODES, SOURCE_TYPES, WIDE_SOURCE_TYPE
+from .constants import (
+    ASSEMBLY_MODES,
+    BUCKET_SCOPES,
+    CLIMATE_BUCKETED_SOURCE_TYPE,
+    DEFAULT_PIVOT_COLUMN_TEMPLATE,
+    LAND_COVER_BUCKETED_SOURCE_TYPE,
+    SOURCE_TYPES,
+    UPSTREAM_SCOPE,
+    WIDE_SOURCE_TYPE,
+)
 
 
 def validate_required_columns(frame, required_columns, frame_name):
@@ -28,6 +37,9 @@ class AssemblySource:
     variables: tuple[str, ...]
     type: str = WIDE_SOURCE_TYPE
     id_map: dict[str, str] = field(default_factory=dict)
+    # Plain column renames applied like `id_map` but without deriving a new id
+    # (e.g. SIH's 6-digit `municipality_code` is already a `mun_id`).
+    rename: dict[str, str] = field(default_factory=dict)
     # `long_pivot` only: keep rows where `frame[column] == value` for each pair
     # in `filter`, then pivot `pivot_column`'s values across `value_columns`
     # into `{pivot_value}_{value_column}` columns (e.g. long climate rows keyed
@@ -35,12 +47,18 @@ class AssemblySource:
     filter: dict[str, object] = field(default_factory=dict)
     pivot_column: str | None = None
     value_columns: tuple[str, ...] = ()
+    # `long_pivot` only: output column name, formatted with `pivot_value` and
+    # `value_column` (e.g. `hosp_icd_{pivot_value}` for a single value column).
+    column_template: str = DEFAULT_PIVOT_COLUMN_TEMPLATE
     # `land_cover_bucketed`/`climate_bucketed` only: kernel used to weight
     # discrete distance buckets when collapsing them into one value per
     # entity. Defaults are set by the transform (`inv_sqrt_distance` for land
     # cover, the shared Gaussian ADM2 default for climate) when omitted.
     kernel: str | None = None
     bandwidth: float | None = None
+    # `land_cover_bucketed`/`climate_bucketed` only: `upstream` (default) or
+    # `local` -- see `constants.BUCKET_SCOPES`.
+    scope: str = UPSTREAM_SCOPE
     # Variables that are categorical/identifiers rather than measurements
     # (e.g. biome_adm2's dominant-biome label) and must be excluded from the
     # numeric-dtype coercion `build._load_source_frame` applies to variables.
@@ -79,6 +97,20 @@ def _parse_source(raw_source, *, dataset_id):
             f"Dataset '{dataset_id}' source '{raw_source.get('name', raw_source['path'])}' "
             "has type 'long_pivot' but no 'pivot_column'."
         )
+    scope = raw_source.get("scope", UPSTREAM_SCOPE)
+    if scope not in BUCKET_SCOPES:
+        raise ValueError(
+            f"Dataset '{dataset_id}' source '{raw_source.get('name', raw_source['path'])}' "
+            f"has unknown scope '{scope}'; must be one of {list(BUCKET_SCOPES)}."
+        )
+    if scope != UPSTREAM_SCOPE and source_type not in (
+        LAND_COVER_BUCKETED_SOURCE_TYPE,
+        CLIMATE_BUCKETED_SOURCE_TYPE,
+    ):
+        raise ValueError(
+            f"Dataset '{dataset_id}' source '{raw_source.get('name', raw_source['path'])}' "
+            f"sets scope '{scope}', which only applies to bucketed sources."
+        )
     return AssemblySource(
         name=raw_source.get("name", raw_source["path"]),
         path=raw_source["path"],
@@ -86,11 +118,14 @@ def _parse_source(raw_source, *, dataset_id):
         variables=tuple(raw_source["variables"]),
         type=source_type,
         id_map=dict(raw_source.get("id_map", {})),
+        rename=dict(raw_source.get("rename", {})),
         filter=dict(raw_source.get("filter", {})),
         pivot_column=raw_source.get("pivot_column"),
         value_columns=tuple(raw_source.get("value_columns", ())),
+        column_template=raw_source.get("column_template", DEFAULT_PIVOT_COLUMN_TEMPLATE),
         kernel=raw_source.get("kernel"),
         bandwidth=raw_source.get("bandwidth"),
+        scope=scope,
         categorical_variables=tuple(raw_source.get("categorical_variables", ())),
     )
 
