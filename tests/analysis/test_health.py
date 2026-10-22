@@ -73,3 +73,19 @@ def test_add_outcomes_masks_early_preterm_and_builds_offsets():
     assert frame.loc[1, H.offset_column("infant_deaths")] == np.log(20.0)
     assert H.offset_column("digestive") == "log_population"
     assert frame.loc[0, "log_population"] == np.log(1000.0)
+
+
+def test_mining_exposure_is_zero_without_near_rings_and_flags_mining_municipalities(monkeypatch):
+    near = pd.DataFrame({"mun_id": ["a", "a", "b", "b"], "year": [2010, 2011, 2010, 2011],
+                         "lc_mining": [0.0, 0.002, 0.0, 0.0]})
+    monkeypatch.setattr(H.panels, "adm2_upstream_land_cover", lambda **kwargs: near)
+    # "c" has no rings within the mining reach.
+    frame = pd.DataFrame({"mun_id": ["a", "a", "b", "b", "c", "c"], "year": [2010, 2011] * 3,
+                          "local_lc_mining": [0.0, 0.0, 0.001, 0.001, 0.0, 0.0]})
+
+    out = H.add_mining_exposure(frame)
+
+    assert out[H.UPSTREAM_MINING_PP].tolist() == [0.0, 0.2, 0.0, 0.0, 0.0, 0.0]
+    assert out[H.UPSTREAM_MINING_PRESENT].tolist() == [0.0, 1.0, 0.0, 0.0, 0.0, 0.0]
+    assert out[H.LOCAL_MINING_PRESENT].tolist() == [0.0, 0.0, 1.0, 1.0, 0.0, 0.0]
+    assert out[H.MINING_MUNICIPALITY].tolist() == [True, True, False, False, False, False]

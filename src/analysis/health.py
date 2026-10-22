@@ -55,7 +55,13 @@ PLACEBO_OUTCOMES = {
     "injuries": ("hosp_injuries_accidents_occupational", "population"),
     "mental_health": ("hosp_mental_health_substance_use", "population"),
 }
-OUTCOMES = {**PRIMARY_OUTCOMES, **SECONDARY_OUTCOMES, **PLACEBO_OUTCOMES}
+# Chapters estimated only in the mining arm: mercury is neurotoxic (ICD 06),
+# lead causes anaemia (ICD 03, blood and blood-forming organs).
+METAL_OUTCOMES = {
+    "nervous_system": ("hosp_icd_06", "population"),
+    "blood": ("hosp_icd_03", "population"),
+}
+OUTCOMES = {**PRIMARY_OUTCOMES, **SECONDARY_OUTCOMES, **PLACEBO_OUTCOMES, **METAL_OUTCOMES}
 HOSPITALIZATION_OUTCOMES = [name for name, (count, _) in OUTCOMES.items() if count.startswith("hosp_")]
 
 # --- Exposure -------------------------------------------------------------------
@@ -65,6 +71,27 @@ MAX_UPSTREAM_KM = pollution.MAX_UPSTREAM_KM
 DISTANCE_BANDS = pollution.DISTANCE_BANDS
 UPSTREAM_REGRESSORS = list(pollution.LAND_COVER_REGRESSORS)
 LOCAL_REGRESSORS = [f"local_{regressor}" for regressor in UPSTREAM_REGRESSORS]
+
+# --- Mining arm -----------------------------------------------------------------
+# As in the pollution arm, mining is a local, point-like source measured within a
+# short upstream reach, and the arm is estimated on municipalities with any
+# mining in that reach over 2000-2024 (1,190; 216 switch presence). Local mining
+# enters alongside, so the upstream terms are net of the municipality's own
+# mining economy. Outcomes are those where a metal signature is expected
+# (mercury, lead, cadmium); the injury placebos pick up economic spillovers.
+MINING_REACH_KM = pollution.MINING_REACH_KM
+UPSTREAM_MINING_PRESENT = f"upstream_mining_present_{MINING_REACH_KM}"
+UPSTREAM_MINING_PP = f"upstream_mining_pp_{MINING_REACH_KM}"
+LOCAL_MINING_PRESENT = "local_mining_present"
+LOCAL_MINING_PP = "local_mining_pp"
+MINING_MUNICIPALITY = "mining_municipality"
+UPSTREAM_MINING_REGRESSORS = [UPSTREAM_MINING_PRESENT, UPSTREAM_MINING_PP]
+LOCAL_MINING_REGRESSORS = [LOCAL_MINING_PRESENT, LOCAL_MINING_PP]
+MINING_OUTCOMES = [
+    "nervous_system", "blood", "renal_urinary", "toxic_poisoning", "congenital", "perinatal",
+    "low_birth_weight", "preterm", "infant_deaths",
+]
+MINING_PLACEBO_OUTCOMES = ["injury_poisoning", "injuries"]
 
 # --- Controls -------------------------------------------------------------------
 
@@ -134,6 +161,24 @@ def add_outcomes(frame):
     return frame
 
 
+def add_mining_exposure(frame, max_km=MINING_REACH_KM):
+    """Add upstream (within `max_km`) and local mining presence and share (pp), and the mining-municipality flag.
+
+    Municipalities without rings within `max_km` have no upstream mining (0),
+    unlike the ALR terms, where a missing ring set has no natural value.
+    `mining_municipality` marks municipalities with upstream mining in any year.
+    """
+    near = panels.adm2_upstream_land_cover(max_km=max_km, years=ANALYSIS_YEARS)[["mun_id", "year", "lc_mining"]]
+    frame = frame.merge(near.rename(columns={"lc_mining": "_lc_mining_near"}),
+                        on=["mun_id", "year"], how="left", validate="one_to_one")
+    frame[UPSTREAM_MINING_PP] = 100 * frame.pop("_lc_mining_near").fillna(0.0)
+    frame[UPSTREAM_MINING_PRESENT] = (frame[UPSTREAM_MINING_PP] > 0).astype(float)
+    frame[LOCAL_MINING_PP] = 100 * frame["local_lc_mining"]
+    frame[LOCAL_MINING_PRESENT] = (frame[LOCAL_MINING_PP] > 0).astype(float).where(frame[LOCAL_MINING_PP].notna())
+    frame[MINING_MUNICIPALITY] = frame.groupby("mun_id")[UPSTREAM_MINING_PRESENT].transform("max").eq(1)
+    return frame
+
+
 def build_health_panel(distance_bands=False):
     """Load `adm2_panel` and apply the §9 model-setup decisions.
 
@@ -141,7 +186,8 @@ def build_health_panel(distance_bands=False):
     offsets, upstream ALR capped at `MAX_UPSTREAM_KM` (`alr_*`) next to the
     local block (`local_alr_*`), local and (renamed, 0 for headwater
     municipalities) upstream climate, the
-    utilization control, and FE / cluster keys. With `distance_bands=True`,
+    utilization control, the mining-arm exposure (`add_mining_exposure`), and
+    FE / cluster keys. With `distance_bands=True`,
     also adds `alr_*__<band>` regressors per band. Municipality-years without
     population or local climate are dropped; headwater municipalities stay in.
     """
@@ -149,6 +195,7 @@ def build_health_panel(distance_bands=False):
     frame = frame.dropna(subset=["population", *CLIMATE_CONTROLS]).reset_index(drop=True)
     frame["population"] = frame["population"].astype(float)
     frame = add_upstream_exposure(frame, distance_bands=distance_bands)
+    frame = add_mining_exposure(frame)
     frame = frame.rename(columns=UPSTREAM_CLIMATE_CONTROLS)
     # Headwater municipalities have no upstream climate either; 0 is absorbed by the FE.
     upstream_climate = list(UPSTREAM_CLIMATE_CONTROLS.values())
