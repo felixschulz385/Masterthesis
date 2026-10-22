@@ -58,7 +58,9 @@ level-3 sub-basins (below). Coefficients are exported to
 municipality + state×year FE, upstream land cover capped at 200 km next to the local
 block, Otto-3 clustering with a wild-cluster score bootstrap. Upstream land-cover change
 has no detectable effect on hospitalizations, infant deaths or low birth weight, and no
-effect differs from the injury placebo. Coefficients are exported to
+effect differs from the injury placebo. The mining arm (§9) finds no pooled effect but a
+suggestive rise in infant deaths (about +23%) where mining appears upstream in the
+Amazon. Coefficients are exported to
 `output/analysis/health/`; see [`health/README.md`](health/README.md).
 
 ## Sub-basins (Otto Pfafstetter)

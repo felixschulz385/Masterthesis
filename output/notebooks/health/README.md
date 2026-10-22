@@ -3,13 +3,20 @@
 **Status (2026-10-22): estimated.** The decision table in `01_descriptives.ipynb` §9 is
 decided and implemented in `src/analysis/health.py`; `02_analysis.ipynb` runs the
 baseline, the placebo comparison, robustness, distance bands, biome heterogeneity and
-wild-cluster score-bootstrap inference (results in `output/analysis/health/`).
+wild-cluster score-bootstrap inference, and a mining arm (results in
+`output/analysis/health/`).
 
 **Main result:** upstream land-cover change has no detectable effect on health in
 downstream municipalities. No upstream pasture or agriculture coefficient is significant
 for any primary outcome, the 95% CIs exclude increases above about 0.6% (pasture) and 1.1%
 (agriculture) per within-municipality SD, and no upstream effect differs from the injury
 placebo. See the summary at the top of `02_analysis.ipynb`.
+
+**Mining arm (§9):** pooled over the 1,190 municipalities with mining within 50 km
+upstream, mining has no robust health effect. In the Amazon, mining appearing upstream
+raises infant deaths by about 23% (bootstrap p = 0.002; flat injury placebo; the rise
+follows onset in the event study). This is suggestive only: 36 onsets in 18 basins, a
+small pre-onset bump, and it survives multiple-testing correction narrowly.
 
 ## Design
 
