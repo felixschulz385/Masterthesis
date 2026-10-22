@@ -160,6 +160,11 @@ def birth_columns():
     return _assembly_source_variables("adm2_panel", "births")
 
 
+def mortality_columns():
+    """Return the `adm2_panel` SIM death-count columns (total and by age band)."""
+    return _assembly_source_variables("adm2_panel", "mortality")
+
+
 def sih_source_system(year):
     """Label each year's SIH series: `"legacy"` up to 2007, `"current"` from 2008."""
     return pd.Series(year).le(SIH_LAST_LEGACY_YEAR).map({True: "legacy", False: "current"}).to_numpy()

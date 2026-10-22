@@ -14,8 +14,7 @@ from ..constants import (
     HOSPITALIZATIONS_FILENAME,
     HOSPITALIZATIONS_ICD10_CHAPTER_FILENAME,
     HOSPITALIZATIONS_SELECTED_MORBIDITY_LIST_FILENAME,
-    MORTALITY_POST_1996_FILENAME,
-    MORTALITY_PRE_1996_FILENAME,
+    MORTALITY_FILENAME,
     birth_outcome_filename,
 )
 from ..constants import health_dir as _shared_health_dir
@@ -251,108 +250,73 @@ def _empty_morbidity_hospitalization_frame():
     )
 
 
+# SIM TABNET age-band columns -> processed death-count columns.
+MORTALITY_AGE_COLUMNS = {
+    "Menor 1 ano": "deaths_under_1",
+    "1 a 4 anos": "deaths_1_to_4",
+    "5 a 9 anos": "deaths_5_to_9",
+    "10 a 14 anos": "deaths_10_to_14",
+    "15 a 19 anos": "deaths_15_to_19",
+    "20 a 29 anos": "deaths_20_to_29",
+    "30 a 39 anos": "deaths_30_to_39",
+    "40 a 49 anos": "deaths_40_to_49",
+    "50 a 59 anos": "deaths_50_to_59",
+    "60 a 69 anos": "deaths_60_to_69",
+    "70 a 79 anos": "deaths_70_to_79",
+    "80 anos e mais": "deaths_80_and_more",
+    "Idade ignorada": "deaths_age_unknown",
+    "Total": "deaths_total",
+}
+# The pre-1996 form (obt09br) codes causes in ICD-9, the post-1995 one (obt10br) in ICD-10.
+MORTALITY_SOURCE_SYSTEMS = {"pre_1996": "sim_icd9", "post_1995": "sim_icd10"}
+
+
 def _clean_mortality_age_frame(frame):
-    frame = frame.copy()
-    frame["year"] = frame["year_code"].map(tabnet_year_from_code)
+    """One row per municipality and year with `deaths_*` counts by age band.
 
-    age_columns = [
-        "Menor 1 ano",
-        "1 a 4 anos",
-        "5 a 9 anos",
-        "10 a 14 anos",
-        "15 a 19 anos",
-        "20 a 29 anos",
-        "30 a 39 anos",
-        "40 a 49 anos",
-        "50 a 59 anos",
-        "60 a 69 anos",
-        "70 a 79 anos",
-        "80 anos e mais",
-        "Idade ignorada",
-    ]
-    raw_count_columns = age_columns + ["total"]
-    frame[raw_count_columns] = (
-        frame[raw_count_columns]
-        .apply(_coerce_tabnet_numeric, axis=0)
-        .fillna(0)
-        .astype("float32")
+    Rows without a 6-digit municipality code (the national "Total" row, the
+    per-state "MUNICIPIO IGNORADO" rows, footnotes) are dropped. Municipalities
+    a year's table does not list stay absent rather than zero-filled: SIM lists
+    every municipality with at least one death, so a missing row mostly means
+    the municipality did not exist yet.
+    """
+    frame = frame.rename(columns={"total": "Total"})
+    missing = sorted(set(MORTALITY_AGE_COLUMNS) - set(frame.columns))
+    if missing:
+        raise ValueError(f"Mortality table is missing age columns: {missing}")
+    municipality = frame["Município"].astype(str).str.strip()
+    parts = municipality.str.extract(r"^(\d{6})\s*(.*)$")
+    out = pd.DataFrame(
+        {
+            "mun_id": parts[0],
+            "mun_name": parts[1].str.strip(),
+            "year": frame["year_code"].map(tabnet_year_from_code),
+        }
     )
-    frame["mun_id"] = frame["Município"].str.extract(r"(\d{6})")[0].str.zfill(6)
-    frame["mun_name"] = frame["Município"].str.extract(r"\d{6}(.*)")[0].str.strip()
-    frame = frame.drop(columns=["Município", "year_code"])
-    frame = frame[["mun_id", "mun_name", "year"] + [col for col in frame.columns if col not in {"mun_id", "mun_name", "year"}]]
-    frame.columns = [
-        "mun_id",
-        "mun_name",
-        "year",
-        "under_1",
-        "1_to_4",
-        "5_to_9",
-        "10_to_14",
-        "15_to_19",
-        "20_to_29",
-        "30_to_39",
-        "40_to_49",
-        "50_to_59",
-        "60_to_69",
-        "70_to_79",
-        "80_and_more",
-        "age_unknown",
-        "total",
-    ]
-    count_columns = [
-        "under_1",
-        "1_to_4",
-        "5_to_9",
-        "10_to_14",
-        "15_to_19",
-        "20_to_29",
-        "30_to_39",
-        "40_to_49",
-        "50_to_59",
-        "60_to_69",
-        "70_to_79",
-        "80_and_more",
-        "age_unknown",
-        "total",
-    ]
-    frame[count_columns] = frame[count_columns].fillna(0)
-    frame = frame.dropna(subset=["mun_id", "mun_name", "year"]).copy()
-
-    municipality_frame = (
-        frame[["mun_id", "mun_name"]]
-        .drop_duplicates()
-        .sort_values(["mun_id", "mun_name"], ignore_index=True)
-    )
-    year_frame = pd.DataFrame({"year": sorted(frame["year"].dropna().unique())})
-    complete_index = municipality_frame.merge(year_frame, how="cross")
-    frame = complete_index.merge(frame, on=["mun_id", "mun_name", "year"], how="left")
-    frame[count_columns] = frame[count_columns].fillna(0)
-
-    return frame.sort_values(["mun_id", "year"], ignore_index=True)
+    for raw_column, column in MORTALITY_AGE_COLUMNS.items():
+        out[column] = _coerce_tabnet_numeric(frame[raw_column]).fillna(0).astype("float32")
+    out = out.dropna(subset=["mun_id"])
+    if out.duplicated(["mun_id", "year"]).any():
+        raise ValueError("Mortality table has duplicate (mun_id, year) rows.")
+    return out.sort_values(["mun_id", "year"], ignore_index=True)
 
 
 def preprocess_mortality_age_tables(root_dir="."):
-    """Clean raw mortality tables and write final CSV outputs."""
+    """Clean the pre-1996 and post-1995 SIM tables and stack them into `health_mortality.parquet`."""
     raw_dir = _raw_dir(root_dir)
-    processed_dir = _processed_dir(root_dir)
-    sources = {
-        "pre_1996": (
-            os.path.join(raw_dir, "mortality_age_counts_pre_1996_raw.parquet"),
-            os.path.join(processed_dir, MORTALITY_PRE_1996_FILENAME),
-        ),
-        "post_1995": (
-            os.path.join(raw_dir, "mortality_age_counts_post_1995_raw.parquet"),
-            os.path.join(processed_dir, MORTALITY_POST_1996_FILENAME),
-        ),
-    }
-
-    outputs = {}
-    for period, (raw_path, output_path) in sources.items():
+    frames = []
+    for period, source_system in MORTALITY_SOURCE_SYSTEMS.items():
+        raw_path = os.path.join(raw_dir, f"mortality_age_counts_{period}_raw.parquet")
         cleaned = _clean_mortality_age_frame(pd.read_parquet(raw_path))
-        cleaned.to_csv(output_path, index=False)
-        outputs[period] = output_path
-    return outputs
+        cleaned.insert(3, "source_system", source_system)
+        frames.append(cleaned)
+    mortality = pd.concat(frames, ignore_index=True)
+    if mortality.duplicated(["mun_id", "year"]).any():
+        raise ValueError("Pre-1996 and post-1995 SIM tables overlap in a year.")
+    output_path = os.path.join(_processed_dir(root_dir), MORTALITY_FILENAME)
+    mortality.to_parquet(output_path, index=False)
+    logger.info("Wrote %s (%d rows)", output_path, len(mortality))
+    return output_path
 
 
 def _coerce_tabnet_numeric(series):

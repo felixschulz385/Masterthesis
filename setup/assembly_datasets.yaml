@@ -530,3 +530,24 @@ datasets:
           - births_low_weight
           - births_gestation_known
           - births_preterm
+      # SIM deaths by municipality of residence and age band. ICD-9 (<= 1995) and
+      # ICD-10 (>= 1996) series never overlap in a year; a municipality-year SIM
+      # does not list (mostly: municipality not yet created) stays missing.
+      - name: mortality
+        path: data/health/processed/health_mortality.parquet
+        join_keys: [mun_id, year]
+        variables:
+          - deaths_total
+          - deaths_under_1
+          - deaths_1_to_4
+          - deaths_5_to_9
+          - deaths_10_to_14
+          - deaths_15_to_19
+          - deaths_20_to_29
+          - deaths_30_to_39
+          - deaths_40_to_49
+          - deaths_50_to_59
+          - deaths_60_to_69
+          - deaths_70_to_79
+          - deaths_80_and_more
+          - deaths_age_unknown

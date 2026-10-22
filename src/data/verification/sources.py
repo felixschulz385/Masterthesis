@@ -1030,7 +1030,7 @@ def _population_fingerprint_paths(root_dir) -> list[Path]:
 # --------------------------------------------------------------------------
 
 # The batch-manifest based SIH tables (see src/data/sources/health/fetch/datasus.py);
-# mortality tables use a simpler non-manifest scrape and aren't counted here.
+# the SINASC and SIM per-year manifests aren't counted here.
 _HEALTH_KNOWN_BATCH_TABLES = (
     "SIH_RESIDENCE_TOTAL_MUNICIPALITY_YEAR",
     "SIH_RESIDENCE_ICD10_CHAPTER_MUNICIPALITY_YEAR",
@@ -1044,6 +1044,7 @@ def _health_output_files() -> tuple[str, ...]:
         HOSPITALIZATIONS_ICD10_CHAPTER_FILENAME,
         HOSPITALIZATIONS_SELECTED_MORBIDITY_LIST_FILENAME,
         BIRTHS_FILENAME,
+        MORTALITY_FILENAME,
         birth_outcome_filename,
     )
 
@@ -1054,6 +1055,7 @@ def _health_output_files() -> tuple[str, ...]:
         birth_outcome_filename("birth_weight"),
         birth_outcome_filename("gestational_duration"),
         BIRTHS_FILENAME,
+        MORTALITY_FILENAME,
     )
 
 
@@ -1067,6 +1069,12 @@ def _health_births_summary_file() -> str:
     from src.data.sources.health.constants import BIRTHS_FILENAME
 
     return BIRTHS_FILENAME
+
+
+def _health_mortality_file() -> str:
+    from src.data.sources.health.constants import MORTALITY_FILENAME
+
+    return MORTALITY_FILENAME
 
 
 _HEALTH_OUTPUT_FILES = _health_output_files()
@@ -1090,6 +1098,9 @@ _HEALTH_BIRTHS_SUMMARY_REQUIRED_COLUMNS = [
     "births_gestation_known",
     "births_preterm",
 ]
+# SIM deaths (preprocess_mortality_age_tables), wide by (mun_id, year).
+_HEALTH_MORTALITY_FILE = _health_mortality_file()
+_HEALTH_MORTALITY_REQUIRED_COLUMNS = ["mun_id", "year", "source_system", "deaths_total", "deaths_under_1"]
 
 
 def _health_list_fetched(root_dir, force: bool = False) -> FetchListing:
@@ -1120,6 +1131,12 @@ def _health_check_outputs(root_dir) -> list[OutputArtifactCheck]:
         checks = [_non_empty_check(frame)]
         if filename == _HEALTH_BIRTHS_SUMMARY_FILE:
             checks.append(check_required_columns(frame, _HEALTH_BIRTHS_SUMMARY_REQUIRED_COLUMNS))
+        elif filename == _HEALTH_MORTALITY_FILE:
+            checks.append(check_required_columns(frame, _HEALTH_MORTALITY_REQUIRED_COLUMNS))
+            if "deaths_total" in frame.columns:
+                checks.append(
+                    check_value_range(frame, "deaths_total", lo=0.0, hi=float("inf"), name="value_range:deaths_total")
+                )
         elif filename in _HEALTH_BIRTH_OUTCOME_FILES:
             checks.append(check_required_columns(frame, _HEALTH_BIRTH_OUTCOME_REQUIRED_COLUMNS))
             if "Total" in frame.columns:

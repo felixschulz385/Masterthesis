@@ -3,8 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from src.data.sources.health.preprocess.preprocess import (
+    MORTALITY_AGE_COLUMNS,
+    _clean_mortality_age_frame,
     _coerce_tabnet_numeric,
     _preprocess_sih_icd10_chapter_request,
     _read_datasus_csv,
@@ -133,3 +136,31 @@ def test_build_birth_summary_counts_low_weight_and_preterm_across_bin_layouts():
     assert summary.loc["123456", "births_preterm"] == 3.0
     assert summary.loc["654321", "births_preterm"] == 4.0
     assert summary.loc["654321", "births_gestation_known"] == 19.0
+
+
+def test_clean_mortality_age_frame_keeps_municipality_rows_and_decodes_years():
+    age_columns = [column for column in MORTALITY_AGE_COLUMNS if column != "Total"]
+    rows = [
+        ("96", " 110001 ALTA FLORESTA D'OESTE", ["12", "2"] + ["-"] * 11, 14.0),
+        ("96", " MUNICIPIO IGNORADO - RO", ["9"] + ["-"] * 12, 9.0),
+        ("96", "Total", ["1.021", "2"] + ["-"] * 11, 1023.0),
+        ("01", "110001 ALTA FLORESTA D'OESTE", ["3"] + ["-"] * 12, 3.0),
+    ]
+    frame = pd.DataFrame(
+        [{"year_code": code, "Município": name, **dict(zip(age_columns, ages)), "Total": total} for code, name, ages, total in rows]
+    )
+
+    cleaned = _clean_mortality_age_frame(frame)
+
+    assert cleaned[["mun_id", "year"]].values.tolist() == [["110001", 1996], ["110001", 2001]]
+    assert cleaned["mun_name"].iloc[0] == "ALTA FLORESTA D'OESTE"
+    assert cleaned["deaths_under_1"].tolist() == [12.0, 3.0]
+    assert cleaned["deaths_1_to_4"].tolist() == [2.0, 0.0]
+    assert cleaned["deaths_total"].tolist() == [14.0, 3.0]
+
+
+def test_clean_mortality_age_frame_rejects_missing_age_columns():
+    frame = pd.DataFrame({"year_code": ["96"], "Município": ["110001 X"], "Total": [1.0]})
+
+    with pytest.raises(ValueError, match="Menor 1 ano"):
+        _clean_mortality_age_frame(frame)

@@ -876,7 +876,7 @@ def test_health_check_outputs_all_missing(tmp_path):
 
     artifacts = adapter.check_outputs(tmp_path)
 
-    assert len(artifacts) == 6
+    assert len(artifacts) == 7
     assert all(not artifact.exists for artifact in artifacts)
 
 
@@ -911,6 +911,22 @@ def test_health_check_outputs_flags_negative_birth_outcome_total(tmp_path):
     artifacts = adapter.check_outputs(tmp_path)
 
     artifact = next(a for a in artifacts if a.label == "health_birth_weight.parquet")
+    assert artifact.exists
+    assert not artifact.ok
+
+
+def test_health_check_outputs_flags_negative_death_count(tmp_path):
+    output_dir = tmp_path / "data" / "health" / "processed"
+    output_dir.mkdir(parents=True)
+    frame = pd.DataFrame(
+        {"mun_id": ["350001"], "year": [2020], "source_system": ["sim_icd10"], "deaths_total": [-1.0], "deaths_under_1": [0.0]}
+    )
+    frame.to_parquet(output_dir / "health_mortality.parquet", index=False)
+
+    adapter = SOURCE_ADAPTERS["health"]
+    artifacts = adapter.check_outputs(tmp_path)
+
+    artifact = next(a for a in artifacts if a.label == "health_mortality.parquet")
     assert artifact.exists
     assert not artifact.ok
 

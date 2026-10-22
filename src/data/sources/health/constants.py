@@ -26,9 +26,9 @@ HOSPITALIZATIONS_FILENAME = "health_hospitalizations.parquet"
 HOSPITALIZATIONS_ICD10_CHAPTER_FILENAME = "health_hospitalizations_icd10_chapter.parquet"
 HOSPITALIZATIONS_SELECTED_MORBIDITY_LIST_FILENAME = "health_hospitalizations_selected_morbidity_list.parquet"
 
-# Processed mortality-age-count outputs (preprocess_mortality_age_tables).
-MORTALITY_PRE_1996_FILENAME = "health_scraping_pre_1996.csv"
-MORTALITY_POST_1996_FILENAME = "health_scraping_post_1996.csv"
+# SIM deaths by municipality, year and age band, 1979 onwards
+# (preprocess_mortality_age_tables).
+MORTALITY_FILENAME = "health_mortality.parquet"
 
 
 # Per-municipality-year birth counts derived from the two birth-outcome tables
