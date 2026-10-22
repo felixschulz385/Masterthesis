@@ -465,9 +465,34 @@ def _fetch_year_batch(root_dir, table_name, manifest_entries, batch_id, fetch_ta
         raise
 
 
+def _format_tabnet_number(value):
+    """Render a parsed number back in DATASUS's own notation (no thousands
+    separator, "," as decimal separator), so the preprocess parser -- which
+    strips every "." as a thousands separator -- reads it back unchanged."""
+    if pd.isna(value):
+        return None
+    if float(value).is_integer():
+        return str(int(value))
+    return repr(float(value)).replace(".", ",")
+
+
 def _combine_year_batches(root_dir, table_name, output_path):
     batch_paths = completed_batch_paths(root_dir, HEALTH_DATASET_NAME, table_name)
-    combined = pd.concat([pd.read_parquet(path) for path in batch_paths], ignore_index=True)
+    frames = [pd.read_parquet(path) for path in batch_paths]
+    # A year whose column has no "-" placeholder gets parsed as numeric, while
+    # a year with one stays text, so the same column can differ in dtype across
+    # batches -- which pyarrow can't write as one column. Keep such columns as
+    # text in DATASUS notation.
+    mixed_columns = {
+        column
+        for column in set().union(*(frame.columns for frame in frames))
+        if len({pd.api.types.is_numeric_dtype(frame[column]) for frame in frames if column in frame}) > 1
+    }
+    for frame in frames:
+        for column in mixed_columns & set(frame.columns):
+            if pd.api.types.is_numeric_dtype(frame[column]):
+                frame[column] = frame[column].map(_format_tabnet_number).astype(object)
+    combined = pd.concat(frames, ignore_index=True)
     return _save_raw_table(combined, output_path)
 
 
