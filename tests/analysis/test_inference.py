@@ -16,7 +16,7 @@ if str(ROOT) not in sys.path:
 pf = pytest.importorskip("pyfixest")
 pytest.importorskip("wildboottest")
 
-from src.analysis.inference import wild_cluster_bootstrap
+from src.analysis.inference import poisson_score_bootstrap, wild_cluster_bootstrap
 
 
 def _panel(effect=0.0, n_basins=30, stations_per_basin=4, samples=12, seed=0):
@@ -70,3 +70,56 @@ def test_uses_webb_weights_with_few_clusters():
     data = _panel(n_basins=8)
     model = pf.feols("y ~ x + z | station", data=data, vcov={"CRV1": "basin"})
     assert wild_cluster_bootstrap(model, "x", cluster="basin", reps=999)["weights"] == "webb"
+
+
+def _count_panel(effect=0.0, n_basins=40, units_per_basin=4, periods=10, seed=0):
+    """Poisson counts with unit FE, an exposure offset and a basin-correlated shock."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for basin in range(n_basins):
+        basin_shock = rng.normal(scale=0.3)
+        for unit in range(units_per_basin):
+            unit_effect = rng.normal(scale=0.5)
+            for t in range(periods):
+                x = rng.normal() + basin_shock
+                z = rng.normal()
+                log_exposure = np.log(rng.integers(500, 5000))
+                mean = np.exp(-4 + effect * x + 0.2 * z + unit_effect + 0.5 * basin_shock + log_exposure)
+                rows.append((f"b{basin:02d}", f"b{basin:02d}u{unit}", t, x, z, log_exposure, rng.poisson(mean)))
+    return pd.DataFrame(rows, columns=["basin", "unit", "t", "x", "z", "log_exposure", "y"])
+
+
+def _fit_poisson(data):
+    return pf.fepois("y ~ x + z | unit + t", data=data, offset="log_exposure", vcov={"CRV1": "basin"})
+
+
+def test_poisson_score_bootstrap_rejects_a_real_effect():
+    result = poisson_score_bootstrap(_fit_poisson(_count_panel(effect=0.3)), "x", cluster="basin", reps=1999, seed=1)
+
+    assert result["n_clusters"] == 40
+    assert result["weights"] == "rademacher"
+    assert result["score_stat"] > 0
+    assert result["p_wcb"] < 0.01
+
+
+def test_poisson_score_bootstrap_does_not_reject_under_the_null():
+    # Over 200 simulated null panels the test rejected 6% at the 5% level
+    # (analytic CRV1: 8%); this panel is one that does not reject.
+    model = _fit_poisson(_count_panel(effect=0.0, seed=1))
+
+    result = poisson_score_bootstrap(model, "x", cluster="basin", reps=1999, seed=1)
+
+    assert result["p_wcb"] > 0.05
+    # Same seed, same draws.
+    assert poisson_score_bootstrap(model, "x", cluster="basin", reps=1999, seed=1)["p_wcb"] == result["p_wcb"]
+
+
+def test_poisson_score_bootstrap_uses_webb_weights_with_few_clusters():
+    model = _fit_poisson(_count_panel(effect=0.0, n_basins=8))
+
+    assert poisson_score_bootstrap(model, "x", cluster="basin", reps=999)["weights"] == "webb"
+
+
+def test_poisson_score_bootstrap_rejects_unknown_parameter():
+    with pytest.raises(ValueError, match="not a regressor"):
+        poisson_score_bootstrap(_fit_poisson(_count_panel()), "w", cluster="basin", reps=99)
